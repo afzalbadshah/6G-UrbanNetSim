@@ -1,0 +1,130 @@
+"""Stable public imports for the packet and flow subsystem.
+
+How to extend: implement behavior in the focused ``network`` module first, add
+tests there, and export only the small public symbol researchers need. Internal
+helpers should not be re-exported from this package boundary.
+"""
+
+from network.accounting import TransmissionLedger, TransmissionLedgerSnapshot
+from network.contracts import (
+    ChannelModel,
+    ChannelRequest,
+    ChannelResult,
+    CompletionRule,
+    DeliveryStatus,
+    Direction,
+    HeaderStack,
+    Hop,
+    LinkProfile,
+    PacketBatch,
+    Packetizer,
+    PacketizationResult,
+    PacketUnit,
+    PDUSet,
+    Plane,
+    TrafficObject,
+    TransmissionOutcome,
+)
+from network.packetization import FixedMtuPacketizer
+from network.links import LinkReservation, SharedLink
+from network.reliability import (
+    BernoulliSample,
+    CounterBasedSampler,
+    PacketErrorSampler,
+    RetryPolicy,
+)
+from network.engine import (
+    HopEnergyModel,
+    HopTransmissionParameters,
+    MeasurementCompleteness,
+    NetworkEngine,
+    NetworkEngineSnapshot,
+    ObjectTransmissionResult,
+    PacketTransmissionResult,
+    PacketRouteTransmission,
+    RouteTransmissionResult,
+    TransmissionAttempt,
+    TransmissionEnergy,
+    TransmissionFailureReason,
+)
+from network.topology import (
+    CoordinateFrame,
+    Extent2D,
+    MaturityLevel,
+    Medium,
+    NodeKind,
+    PhysicalTopology,
+    Position3D,
+    Provenance,
+    Route,
+    TopologyLink,
+    TopologyNode,
+)
+from network.routing import ResolvedHop, ResolvedRoute, RouteResolver
+from network.wired import FixedRateChannelModel
+from network.profiles import (
+    LinkProfileTemplate,
+    instantiate_link_profile,
+    link_profile_template_from_mapping,
+    load_link_profile_template,
+)
+
+__all__ = [
+    "BernoulliSample",
+    "ChannelModel",
+    "ChannelRequest",
+    "ChannelResult",
+    "CompletionRule",
+    "CoordinateFrame",
+    "CounterBasedSampler",
+    "DeliveryStatus",
+    "Direction",
+    "Extent2D",
+    "FixedMtuPacketizer",
+    "FixedRateChannelModel",
+    "HeaderStack",
+    "Hop",
+    "HopEnergyModel",
+    "HopTransmissionParameters",
+    "LinkProfile",
+    "LinkProfileTemplate",
+    "LinkReservation",
+    "MaturityLevel",
+    "MeasurementCompleteness",
+    "Medium",
+    "NetworkEngine",
+    "NetworkEngineSnapshot",
+    "NodeKind",
+    "ObjectTransmissionResult",
+    "PacketBatch",
+    "PacketErrorSampler",
+    "Packetizer",
+    "PacketizationResult",
+    "PacketTransmissionResult",
+    "PacketRouteTransmission",
+    "PhysicalTopology",
+    "PacketUnit",
+    "PDUSet",
+    "Plane",
+    "Position3D",
+    "Provenance",
+    "ResolvedHop",
+    "ResolvedRoute",
+    "RetryPolicy",
+    "Route",
+    "RouteTransmissionResult",
+    "RouteResolver",
+    "TrafficObject",
+    "TransmissionAttempt",
+    "TransmissionEnergy",
+    "TransmissionFailureReason",
+    "TransmissionLedger",
+    "TransmissionLedgerSnapshot",
+    "TransmissionOutcome",
+    "TopologyLink",
+    "TopologyNode",
+    "SharedLink",
+    "instantiate_link_profile",
+    "link_profile_template_from_mapping",
+    "load_link_profile_template",
+]
