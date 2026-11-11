@@ -1,0 +1,125 @@
+\clearpage
+\onecolumn
+\appendices
+\renewcommand{\theequation}{\Alph{section}.\arabic{equation}}
+\renewcommand{\theHequation}{\Alph{section}.\arabic{equation}}
+\setcounter{section}{0}
+\setcounter{equation}{0}
+\setcounter{table}{0}
+\renewcommand*{\theHtable}{appendix.\arabic{table}}
+
+\section{State Encoding and Fixed Normalization}
+\label{sec:appendix-state-encoding}
+
+The offloading agent receives the 62-entry observation defined in~\eqref{eq:observation-encoding}.
+The first 22 entries describe the task, device, and network conditions, as shown in Table~\ref{tab:state-context-features}.
+The remaining 40 entries are arranged in four blocks of ten features, one block for each action slot.
+Table~\ref{tab:state-action-features} gives the order of features within each block.
+For slot \(a=0,\ldots,3\), feature \(k=1,\ldots,10\) show position \(22+10a+k\) in the observation.
+Slot \(a=0\) corresponds to onboard execution.
+%
+To normalize a value \(x\), the encoder divides it by a positive scale \(b\) and clips the result to the interval \([0,1]\).
+
+\begin{equation}
+\mathcal N(x;b)=\operatorname{clip}(x/b,0,1).
+\label{eq:appendix-fixed-normalization}
+\end{equation}
+The encoder uses fixed scales throughout training and evaluation.
+
+The first four context features record the task payload in kilobytes and the values of the legacy \acs{cpu}, memory, and storage demand fields.
+The encoder divides all four values by \(M_D=2.5D_{\mathrm{cfg}}\), where \(D_{\mathrm{cfg}}\) is the fixed value of the \texttt{data\_per\_device\_kb} environment.
+The payload in the first feature is the size of the individual task.
+The scaling applies only to the observation inputs.
+Compute-rate demand, available capacity, and battery energy retain their physical units in the admission, execution, and reward calculations.
+
+The encoder scales the handover count by the configured maximum number of devices, \(N_{\max}\).
+For the distance features, it uses \(L=\max\{1,\sqrt{X_{\max}^2+Y_{\max}^2}\}\), where \(X_{\max}\) and \(Y_{\max}\) are the upper bounds of the city coordinates in metres.
+In the evaluated configuration, \(D_{\mathrm{cfg}}=400\), \(M_D=1000\), \(N_{\max}=200\), and \(X_{\max}=Y_{\max}=10{,}000\)~m, giving \(L\approx14{,}142\)~m.
+For feature 17, the mobility observer computes the mean distance of the active devices from their position centroid and rounds it to two decimal places before normalization.
+
+\begin{table}[!htbp]
+\centering
+\caption{Ordered context features. Indices refer to the first 22 observation positions.}
+\label{tab:state-context-features}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}r p{0.51\linewidth} p{0.36\linewidth}@{}}
+\toprule
+Index & Input quantity & Encoded value \\
+\midrule
+1 & Task payload, numerical kilobyte value & \(\mathcal N(\text{payload};M_D)\) \\
+2 & Legacy \acs{cpu} demand, \texttt{cpu\_demand} & \(\mathcal N(\text{legacy CPU demand};M_D)\) \\
+3 & Legacy memory demand, \texttt{memory\_demand} & \(\mathcal N(\text{legacy memory demand};M_D)\) \\
+4 & Legacy storage demand, \texttt{storage\_demand} & \(\mathcal N(\text{legacy storage demand};M_D)\) \\
+5 & Service priority (\(p_i\)): 1 for \acs{hrllc}, 2 for \acs{mc}, 3 for \acs{ic} & \(\mathcal N(p_i;3)\) \\
+6 & Application deadline, in milliseconds & \(\mathcal N(\text{deadline};1000)\) \\
+7 & Device-to-serving-\acs{bs} distance (\(D_i^{\mathrm{BS}}\)), in metres & \(\mathcal N(D_i^{\mathrm{BS}};L)\) \\
+8 & Received signal level (\(S_i^{\mathrm{rx}}\)), in dBm & \(\mathcal N(|S_i^{\mathrm{rx}}|;120)\) \\
+9 & Device has onboard compute capability & Binary indicator \\
+10 & Device handover delay, in milliseconds & \(\mathcal N(\text{handover delay};500)\) \\
+11 & Device movement speed, in metres per second & \(\mathcal N(\text{speed};30)\) \\
+12 & Predicted dwell time, in milliseconds & \(\mathcal N(\text{dwell time};60{,}000)\) \\
+13 & Device handover-risk value & \(\mathcal N(\text{handover risk};1)\) \\
+14 & Device remaining-battery fraction \(\beta_i\) & Clipped to \([0,1]\) \\
+15 & Number of handovers in the current mobility step & \(\mathcal N(\text{handover count};N_{\max})\) \\
+16 & Sum of handover delays in the current mobility step, in milliseconds & \(\mathcal N(\text{handover-delay sum};1000)\) \\
+17 & Mean distance of active devices from their position centroid, in metres & \(\mathcal N(\text{position dispersion};L)\) \\
+18 & Device horizontal coordinate (\(x_i\)), in metres & \(\mathcal N(x_i;X_{\max})\) \\
+19 & Device battery below the configured low-battery fraction & \(\mathbf 1\{\beta_i<0.30\}\) \\
+20 & Service indicator: \acs{hrllc} & \(\mathbf 1\{p_i=1\}\) \\
+21 & Service indicator: \acs{mc} & \(\mathbf 1\{p_i=2\}\) \\
+22 & Service indicator: \acs{ic} & \(\mathbf 1\{p_i=3\}\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each action block describes the conditions the task would face under that execution option.
+Current utilization \(u_{ia}\) measures the fraction of capacity in use before the task arrives.
+Projected utilization \(\widehat u_{ia}\) estimates the fraction that would be in use after adding the task.
+For onboard execution, both values are based on \acs{cpu} utilization.
+For a remote option, the encoder uses the highest utilization among \acs{cpu}, memory, and storage at the selected server.
+Current and projected headroom give the corresponding fractions of capacity that are free.
+
+For a remote option, \(g_{ia}\) is the congestion percentage reported for the selected server.
+The encoder divides this percentage by 100 and clips the result to \([0,1]\).
+
+Compute adequacy \(\kappa_{ia}\) compares the execution option's total compute capacity \(C_{ia,\mathrm{cpu}}\) with the task's required compute rate \(\rho_i\).
+Both are measured in cycles per second.
+When both values are positive, the encoder divides capacity by demand and clips the result to \([0,1]\).
+The score is zero when capacity is zero or negative.
+It is one when capacity is positive and demand is zero or negative.
+
+\begin{table}[H]
+\centering
+\caption{Ordered features repeated for each of the four action slots.}
+\label{tab:state-action-features}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}r p{0.51\linewidth} p{0.36\linewidth}@{}}
+\toprule
+Block index & Input quantity & Encoded value \\
+\midrule
+1 & Physical admission and route-feasibility mask \(m_{ia}\) & Binary indicator \\
+2 & Projected utilization & \(\operatorname{clip}(\widehat u_{ia},0,1)\) \\
+3 & Resolved-server congestion percentage & \(\mathcal N(g_{ia};100)\) \\
+4 & Projected free headroom & \(1-\operatorname{clip}(\widehat u_{ia},0,1)\) \\
+5 & Current free headroom & \(\operatorname{clip}(1-u_{ia},0,1)\) \\
+6 & Task-relative compute adequacy & \(\kappa_{ia}\) \\
+7 & Remaining-battery fraction of the resolved server (\(\beta_{ia}^{S}\)) & Clipped to \([0,1]\) \\
+8 & Resolved-server battery below the low-battery fraction & \(\mathbf 1\{\beta_{ia}^{S}<0.30\}\) \\
+9 & Action availability & Binary indicator, defined below \\
+10 & Action is onboard execution & \(\mathbf 1\{a=0\}\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For onboard execution, the availability flag is one when local computing is enabled and the device supports it.
+The feasibility mask indicates whether the device can accept the particular task under the applicable resource and battery checks.
+For a remote option, the availability flag is one when the server-selection procedure finds an operational, reachable server that can accept the task.
+
+To compute the server's remaining-battery fraction, the encoder divides the remaining energy by the battery capacity and clips the result to \([0,1]\).
+If there is no selected server or its battery capacity is zero or negative, the encoder sets the fraction to one.
+Onboard execution uses this default and records zero server congestion.
+The device's own battery fraction appears in feature 14 of Table~\ref{tab:state-context-features}.
