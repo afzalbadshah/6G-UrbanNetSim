@@ -33,8 +33,8 @@ from core.run_history import select_phase
 # An explicit path passed to a plotting function/command still takes priority.
 # ============================================================================
 VISUALIZATION_RUNS = {
-    "exploration": None,
-    "evaluation": "run_008_zoned_satellite_6g_evaluation",
+    "exploration": "run_001_fr3_urban_aiot_training",
+    "evaluation": "run_002_fr3_urban_aiot_evaluation",
 }
 
 
@@ -78,7 +78,12 @@ def plot_phase_dir(phase_name="evaluation", explicit_phase=None):
     )
 
 
-RESULTS_PHASE = str(plot_phase_dir("evaluation"))
+# Importing a runner must work before its first evaluation exists. Explicit
+# plot requests still validate pinned sources through plot_phase_dir().
+try:
+    RESULTS_PHASE = str(plot_phase_dir("evaluation"))
+except FileNotFoundError:
+    RESULTS_PHASE = str(_ROOT / str(cfg.OUTPUT_DIR) / "evaluation")
 
 
 def _phase_dir(phase=None):

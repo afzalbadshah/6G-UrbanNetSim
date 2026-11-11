@@ -77,12 +77,6 @@ BLUE = colors.HexColor("#356A94")
 WARM = colors.HexColor("#F5F1EA")
 
 
-
-def _eval_dir(run_dir):
-    """Evaluation seeds live in <run>/evaluation (old layout) or <run> (flat)."""
-    nested = Path(run_dir) / "evaluation"
-    return nested if nested.is_dir() else Path(run_dir)
-
 def _fmt_energy(value: float) -> str:
     if not math.isfinite(value):
         return "n/a"
@@ -100,13 +94,13 @@ def _fmt_percent(value: float, digits: int = 1) -> str:
 
 
 def _read_manifest(run_dir: Path) -> dict:
-    path = _eval_dir(run_dir) / "manifest.json"
+    path = run_dir / "evaluation" / "manifest.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
 def _result_paths(run_dir: Path) -> dict[str, list[Path]]:
     paths: dict[str, list[Path]] = {}
-    for path in sorted(_eval_dir(run_dir).glob("seed_*/offloading/*/results.csv")):
+    for path in sorted((run_dir / "evaluation").glob("seed_*/offloading/*/results.csv")):
         paths.setdefault(path.parent.name, []).append(path)
     return paths
 

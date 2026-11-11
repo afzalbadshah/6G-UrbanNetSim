@@ -71,17 +71,6 @@ def _read_training_csv(path: Path, delimiter: str, columns: Iterable[str]) -> pd
         return pd.DataFrame()
 
 
-def _read_training_metric_group(model_dir: Path, metric_group: str, columns: Iterable[str]) -> pd.DataFrame:
-    """Read one metric group from consolidated training_metrics.csv."""
-    requested = ("metric_group", *tuple(columns))
-    frame = _read_training_csv(model_dir / "training_metrics.csv", ",", requested)
-    if frame.empty or "metric_group" not in frame.columns:
-        return pd.DataFrame()
-    group_rows = frame["metric_group"].astype(str) == str(metric_group)
-    frame = frame.loc[group_rows, [column for column in columns if column in frame.columns]]
-    return frame.reset_index(drop=True)
-
-
 def _numeric(frame: pd.DataFrame, column: str) -> pd.Series:
     """Return a numeric version of one column."""
     if column not in frame.columns:
@@ -272,13 +261,11 @@ def _action_frames_for_class(
     frames: dict[str, pd.DataFrame] = {}
     requested = ("round", "priority", "priority_class", *ACTION_LABEL_LIST)
     for seed_label, model_dir in discover_seed_runs(phase_dir, model).items():
-        frame = _read_training_metric_group(model_dir, "action_distribution", requested)
-        if frame.empty:
-            frame = _read_training_csv(
-                model_dir / f"{model}_action_distribution.csv",
-                ",",
-                requested,
-            )
+        frame = _read_training_csv(
+            model_dir / f"{model}_action_distribution.csv",
+            ",",
+            requested,
+        )
         if frame.empty or "round" not in frame.columns:
             continue
         if "priority_class" in frame.columns:
@@ -540,7 +527,7 @@ def generate_model_figures(
     phase_path = Path(phase_dir)
     if not discover_seed_runs(phase_path, model):
         raise ValueError(f"No seed output found for model {model!r} under {phase_path}")
-    output_dir = phase_path / "plots" / model
+    output_dir = phase_path / "plots" / "by_model" / model
     output_dir.mkdir(parents=True, exist_ok=True)
     for filename in OBSOLETE_MODEL_FIGURES:
         (output_dir / filename).unlink(missing_ok=True)
@@ -569,7 +556,7 @@ def generate_campaign_summary(
         comparison_window_rounds,
         dpi,
     )
-    all_figures = sorted((phase_path / "plots").glob("*/*.png"))
+    all_figures = sorted((phase_path / "plots" / "by_model").glob("*/*.png"))
     all_figures.append(comparison_path)
     manifest = {
         "created_utc": datetime.now(timezone.utc).isoformat(),

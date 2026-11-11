@@ -54,7 +54,6 @@ class NodeKind(str, Enum):
     CLOUD_GATEWAY = "cloud_gateway"
     UAV_BS = "uav_bs"
     NTN = "ntn"
-    SAT_GATEWAY = "sat_gateway"
 
 
 class Medium(str, Enum):

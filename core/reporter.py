@@ -18,11 +18,6 @@ import csv
 from pathlib import Path
 
 try:
-    from scheduler.common import common_config as common_cfg
-except Exception:
-    common_cfg = None
-
-try:
     import pandas as pd
     import matplotlib
     matplotlib.use("Agg")
@@ -147,61 +142,17 @@ class TrainingReporter:
                 written[name] = path
         return written
 
-    @staticmethod
-    def _legacy_training_logs_enabled():
-        return bool(getattr(common_cfg, "WRITE_LEGACY_TRAINING_LOGS", False))
-
-    @staticmethod
-    def _metric_rows(groups, common=None):
-        common = dict(common or {})
-        rows = []
-        for metric_group, source_rows in groups:
-            for row in source_rows or []:
-                clean = dict(common)
-                clean.update(row)
-                clean["metric_group"] = metric_group
-                rows.append(clean)
-        return rows
-
     def save_offloading_training(self, model_name, reward_log=None, epsilon_log=None,
                                   action_dist_log=None, loss_log=None,
                                   include_plots=False, visualizer=None):
         model = str(model_name).strip().lower()
         action_fields = list(action_dist_log[0].keys()) if action_dist_log else None
-        written = {}
-        metrics_path = self.write_rows(
-            "training_metrics.csv",
-            self._metric_rows(
-                (
-                    ("reward", reward_log),
-                    ("epsilon", epsilon_log),
-                    ("action_distribution", action_dist_log),
-                    ("loss", loss_log),
-                ),
-                common={"model": model},
-            ),
-            fieldnames=(
-                "metric_group",
-                "model",
-                "round",
-                "priority",
-                "priority_class",
-                "action",
-                "reward",
-                "epsilon",
-                "loss",
-                *(action_fields or ()),
-            ),
-        )
-        if metrics_path is not None:
-            written["training_metrics.csv"] = metrics_path
-        if self._legacy_training_logs_enabled():
-            written.update(self.write_many([
-                (f"{model}_reward_log.csv", reward_log, ("round", "reward", "action", "priority")),
-                (f"{model}_epsilon_decay.csv", epsilon_log, ("round", "epsilon")),
-                (f"{model}_action_distribution.csv", action_dist_log, action_fields),
-                (f"{model}_loss_log.csv", loss_log, ("round", "loss")),
-            ]))
+        written = self.write_many([
+            (f"{model}_reward_log.csv", reward_log, ("round", "reward", "action", "priority")),
+            (f"{model}_epsilon_decay.csv", epsilon_log, ("round", "epsilon")),
+            (f"{model}_action_distribution.csv", action_dist_log, action_fields),
+            (f"{model}_loss_log.csv", loss_log, ("round", "loss")),
+        ])
         if include_plots and visualizer is not None:
             visualizer.output_dir = self.output_dir
             visualizer.save_all_plots()
@@ -209,34 +160,11 @@ class TrainingReporter:
 
     def save_handover_training(self, reward_log=None, loss_log=None,
                                action_dist_log=None, include_plots=True):
-        written = {}
-        metrics_path = self.write_rows(
-            "training_metrics.csv",
-            self._metric_rows((
-                ("reward", reward_log),
-                ("loss", loss_log),
-                ("action_distribution", action_dist_log),
-            )),
-            fieldnames=(
-                "metric_group",
-                "round",
-                "device_id",
-                "action",
-                "decision_type",
-                "reward",
-                "actor_loss",
-                "critic_loss",
-                "advantage",
-            ),
-        )
-        if metrics_path is not None:
-            written["training_metrics.csv"] = metrics_path
-        if self._legacy_training_logs_enabled():
-            written.update(self.write_many([
-                ("reward_log_mobility.csv", reward_log, ("round", "device_id", "reward")),
-                ("loss_log_mobility.csv", loss_log, ("round", "actor_loss", "critic_loss", "advantage")),
-                ("action_distribution_mobility.csv", action_dist_log, ("round", "action", "decision_type")),
-            ]))
+        written = self.write_many([
+            ("reward_log_mobility.csv", reward_log, ("round", "device_id", "reward")),
+            ("loss_log_mobility.csv", loss_log, ("round", "actor_loss", "critic_loss", "advantage")),
+            ("action_distribution_mobility.csv", action_dist_log, ("round", "action", "decision_type")),
+        ])
         if include_plots and (reward_log or loss_log):
             self._save_handover_training_summary(reward_log or [], loss_log or [])
         return written

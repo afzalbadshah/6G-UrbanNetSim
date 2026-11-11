@@ -152,18 +152,6 @@ _RAW_POWER_PROFILES = {
         tx_circuit_power_w=2.0, rx_circuit_power_w=1.5,
         idle_power_w=0.3, sleep_power_w=0.05, prov=_P_UAV_RADIO),
 
-    # LEO satellite payload radio (transparent repeater; feeder downlink to the
-    # gateway). ~10 W radiated per beam, solar-powered (not a device battery).
-    "ntn_radio_default": _radio(
-        radiated_tx_power_w=10.0, radiated_tx_power_max_w=20.0, pa_efficiency_ratio=0.30,
-        tx_circuit_power_w=20.0, rx_circuit_power_w=10.0,
-        idle_power_w=5.0, sleep_power_w=1.0, prov=_P_ACCESS_RADIO),
-    # Satellite ground gateway (teleport) RF chain.
-    "sat_gateway_radio_default": _radio(
-        radiated_tx_power_w=10.0, radiated_tx_power_max_w=100.0, pa_efficiency_ratio=0.30,
-        tx_circuit_power_w=50.0, rx_circuit_power_w=30.0,
-        idle_power_w=20.0, sleep_power_w=5.0, prov=_P_ACCESS_RADIO),
-
     # -- Compute tiers (idle/max/dynamic power + PUE boundary) -----------------
     "onboard_compute": _compute(
         idle_power_w=0.1, max_power_w=3.0, dynamic_power_w=2.9,

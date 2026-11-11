@@ -10,11 +10,8 @@ congestion knobs. To change a run's logging or a timing scale, edit it here
 SIMULATION = {
     "rounds": 1,
     # Radio-access density is independent of SERVER_CONFIG MEC compute count.
-    # Satellite-IoT scenario (config/zones.py): 6G towers in the city zone,
-    # UAV-BS edge in the UAV zone, LEO satellite outside the city.
-    # Use "fr3_city_coverage_6g" (and ZONES_ENABLED=False) for the original city.
-    "deployment_profile": "zoned_satellite_6g",
-    "interactive_deployment_profile": "zoned_satellite_6g",
+    "deployment_profile": "fr3_urban_aiot",
+    "interactive_deployment_profile": "fr3_urban_aiot",
     "print_cost": True,
     "print_congestion": True,
     "log_assignments": True,

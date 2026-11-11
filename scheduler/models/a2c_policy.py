@@ -1,11 +1,12 @@
 import os
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from scheduler.common.policy_utils import NoFeasibleActionError, load_checkpoint, masked_argmax, save_checkpoint, to_tensor
+from scheduler.common.policy_utils import EpsilonScheduler, NoFeasibleActionError, load_checkpoint, masked_argmax, masked_random_action, save_checkpoint, to_tensor
 from scheduler.models.base_policy import BasePolicy
 
 
@@ -53,12 +54,14 @@ class A2CPolicy(BasePolicy):
         # policy collapse both otherwise show on harder state->action mappings.
         self.logit_l2 = float(getattr(config, "PPO_LOGIT_L2", 1e-3))
         self.rollout = []
-        # Actor-critic exploration must remain on-policy. Training actions are
-        # sampled from the actor's categorical distribution, with entropy
-        # regularization keeping that distribution exploratory. A separate
-        # epsilon-random branch would give A2C/PPO actions whose behavior
-        # probability does not match the log-probability used by their loss.
-        self.epsilon = 0.0
+        self.epsilon_scheduler = EpsilonScheduler(
+            start=getattr(config, "EPSILON_START", 1.0),
+            minimum=getattr(config, "EPSILON_MIN", 0.05),
+            decay=getattr(config, "EPSILON_DECAY", 0.995),
+            decay_steps=getattr(config, "EPSILON_DECAY_STEPS", 0),
+        )
+        self.epsilon = self.epsilon_scheduler.value
+        self.epsilon_granularity = str(getattr(config, "EPSILON_DECAY_GRANULARITY", "decision")).lower()
         # --- Phase 0 instrumentation (no behavior change): count how many
         # gradient updates were actually applied vs. discarded because the loss
         # went non-finite (the `if not torch.isfinite(loss)` bailout). A high
@@ -79,12 +82,15 @@ class A2CPolicy(BasePolicy):
 
     def set_train_mode(self, is_training):
         super().set_train_mode(is_training)
-        self.epsilon = 0.0
+        self.epsilon = self.epsilon_scheduler.reset(self.train_mode)
 
     def on_training_round(self, round_id):
-        return None
+        if self.train_mode and self.epsilon_granularity == "round":
+            self.epsilon = self.epsilon_scheduler.set_step(round_id)
 
     def select_action(self, state, mask=None):
+        if self.train_mode and np.random.random() < self.epsilon:
+            return masked_random_action(mask, self.action_dim)
         state_t = to_tensor(state).float().unsqueeze(0)
         with torch.no_grad():
             logits, _ = self.net(state_t)
@@ -152,6 +158,8 @@ class A2CPolicy(BasePolicy):
         torch.nn.utils.clip_grad_norm_(self.net.parameters(), 1.0)
         self.optimizer.step()
         self._updates_applied += 1
+        if self.epsilon_granularity != "round":
+            self.epsilon = self.epsilon_scheduler.step()
         return float(loss.item())
 
     def save(self, path):

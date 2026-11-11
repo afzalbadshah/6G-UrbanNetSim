@@ -18,7 +18,6 @@ TIER_COLORS = {
     "METRO": "#ea580c",
     "CLOUD": "#16a34a",
     "UAV_BS": "#dc2626",        # UAV base station: red
-    "SAT": "#f59e0b",           # LEO satellite -> gateway -> Cloud: amber
 }
 
 

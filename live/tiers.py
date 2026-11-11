@@ -6,8 +6,6 @@ TIER_COLORS = {
     "Metro":   "#db2777",  # magenta/pink
     "Cloud":   "#16a34a",  # green
     "UAV_BS":  "#7c3aed",  # purple (aerial edge)
-    "SAT":     "#f59e0b",  # amber (LEO satellite -> gateway -> Cloud)
-    "LEO_SAT": "#f59e0b",
     "Unknown": "#6b7280",  # gray
 }
 
@@ -27,8 +25,6 @@ def norm_tier_token(token: str) -> str:
         return "Cloud"
     if t in {"uav_bs", "uavbs", "uav", "air"}:
         return "UAV_BS"
-    if t in {"sat", "leo", "leo_sat", "satellite"}:
-        return "SAT"
     return "Unknown"
 
 

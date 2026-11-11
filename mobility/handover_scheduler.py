@@ -365,13 +365,15 @@ class HandoverScheduler:
         except Exception as e:
             print(f"[HANDOVER][ERROR] Failed to save models: {e}")
 
-    def load(self, path=None):
+    def load(self, path=None, strict=False):
         path = path or self.model_dir
         try:
             self.actor.load_state_dict(load_checkpoint(os.path.join(path, "handover_actor.pth"), map_location="cpu"))
             self.critic.load_state_dict(load_checkpoint(os.path.join(path, "handover_critic.pth"), map_location="cpu"))
             self.set_train_mode(False)
         except Exception as e:
+            if strict:
+                raise
             print(f"[HANDOVER][ERROR] Failed to load models: {e}")
 
     # ------------------------------------------------------ link metrics --

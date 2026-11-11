@@ -17,12 +17,11 @@ from types import SimpleNamespace
 
 from config.radio import get_link_profile
 from config.servers import ELECTRICITY_PRICE_PER_JOULE
-from config.reward import REWARD_SCHEMA_VERSION
 from metrics.kpi import bounded_ratio, offered_load_ratio
 from metrics.reward import RewardObservation, evaluate_reward
 from scheduler.base_scheduler import BaseScheduler
 from scheduler.common import common_config as default_config
-from scheduler.common.common_action import ACTION_CLOUD, ACTION_LOCAL, ACTION_MEC, ACTION_MEC_COLLAB, ACTION_METRO, ACTION_UAV_BS, ACTION_SAT, action_to_label, get_action_dim, label_to_action
+from scheduler.common.common_action import ACTION_CLOUD, ACTION_LOCAL, ACTION_MEC, ACTION_MEC_COLLAB, ACTION_METRO, ACTION_UAV_BS, action_to_label, get_action_dim, label_to_action
 from scheduler.common.common_mask import CommonActionMask
 from scheduler.common.common_state import CommonStateBuilder
 from scheduler.common.common_transition import build_transition
@@ -181,9 +180,6 @@ class ComparisonRunner(BaseScheduler):
         "reward_util_reward",
         "reward_overutilization_penalty",
         "reward_overutilization_weight",
-        "reward_overutilization_deduction_points",
-        "reward_schema_version",
-        "no_service_available",
         "reward_invalid_action_penalty",
         "reward_deadline_weight",
         "reward_cost_weight",
@@ -410,15 +406,6 @@ class ComparisonRunner(BaseScheduler):
         "dropped",
         "deadline_missed",
         "status",
-        # Satellite-IoT scenario columns.
-        "zone_id",
-        "sat_available",
-        "sat_elevation_deg",
-        "sat_slant_range_m",
-        "sat_access_node",
-        "sat_selected",
-        "reward_forced_single_action",
-        "reward_deadline_penalty_exempt",
     ]
 
     HANDOVER_FIELDNAMES = [
@@ -512,19 +499,9 @@ class ComparisonRunner(BaseScheduler):
         "q_margin",
     ]
 
-    MOBILITY_FIELDNAMES = HANDOVER_FIELDNAMES + [
-        "decision_idx",
-        "handover_prev_bs",
-        "handover_chosen_cpu_util",
-        "handover_chosen_mem_util",
-        "handover_oracle_cpu_util",
-        "handover_oracle_mem_util",
-        "load_regret",
-        "handover_q_margin",
-    ]
-
-    def __init__(self, model_name, config=default_config, output_dir=None, seed=None):
+    def __init__(self, model_name, config=default_config, output_dir=None, seed=None, checkpoint_root=None):
         self.model_name = str(model_name or "random").strip().lower()
+        self.checkpoint_root = Path(checkpoint_root or "trained_model")
         self.config = config
         # Phase 4: honor an explicit per-run seed. Previously this always
         # re-seeded to config.RANDOM_SEED, silently overriding any seed the
@@ -560,16 +537,12 @@ class ComparisonRunner(BaseScheduler):
         self.output_dir = self.output_root / self.model_name
         self.mobility_dir = self.output_dir
         self.offloading_filename = f"{self.model_name}_{getattr(config, 'OFFLOADING_FILE_SUFFIX', 'offloading_results.csv')}"
-        self.write_legacy_offloading_copy = bool(getattr(config, "WRITE_LEGACY_OFFLOADING_COPY", False))
-        self.write_legacy_mobility_detail_csvs = bool(getattr(config, "WRITE_LEGACY_MOBILITY_DETAIL_CSVS", False))
         self._csv_path = None
         self._csv_ready = False
         self._csv_fh = None
         self._csv_writer = None
         self._main_fh = None
         self._main_writer = None
-        self._mobility_fh = None
-        self._mobility_writer = None
         self._handover_fh = None
         self._handover_writer = None
         self._decision_quality_fh = None
@@ -621,36 +594,27 @@ class ComparisonRunner(BaseScheduler):
                 self._close_csv()
                 output_dir.mkdir(parents=True, exist_ok=True)
                 mobility_dir.mkdir(parents=True, exist_ok=True)
-                self._csv_path = output_dir / "results.csv"
-                self._main_fh = open(self._csv_path, "w", newline="", encoding="utf-8")
+                self._csv_path = output_dir / self.offloading_filename
+                self._main_fh = open(output_dir / "results.csv", "w", newline="", encoding="utf-8")
                 self._main_writer = csv.DictWriter(self._main_fh, fieldnames=self.FIELDNAMES, delimiter=self.CSV_DELIMITER)
                 self._main_writer.writeheader()
-                if self.write_legacy_offloading_copy:
-                    self._csv_fh = open(output_dir / self.offloading_filename, "w", newline="", encoding="utf-8")
-                    self._csv_writer = csv.DictWriter(self._csv_fh, fieldnames=self.FIELDNAMES, delimiter=self.CSV_DELIMITER)
-                    self._csv_writer.writeheader()
+                self._csv_fh = open(self._csv_path, "w", newline="", encoding="utf-8")
+                self._csv_writer = csv.DictWriter(self._csv_fh, fieldnames=self.FIELDNAMES, delimiter=self.CSV_DELIMITER)
+                self._csv_writer.writeheader()
                 # RSSI/oracle-regret/ping-pong/handover decision-quality data is
                 # mobility content, not offloading content -- goes under mobility_dir
                 # (see core/simulator.py's offloading/<model> vs mobility/<model>
                 # split) alongside the handover scheduler's own CSVs/plots.
-                self._mobility_fh = open(mobility_dir / "results.csv", "w", newline="", encoding="utf-8")
-                self._mobility_writer = csv.DictWriter(
-                    self._mobility_fh,
-                    fieldnames=self.MOBILITY_FIELDNAMES,
+                self._handover_fh = open(mobility_dir / "handover_results.csv", "w", newline="", encoding="utf-8")
+                self._handover_writer = csv.DictWriter(self._handover_fh, fieldnames=self.HANDOVER_FIELDNAMES, delimiter=self.CSV_DELIMITER)
+                self._handover_writer.writeheader()
+                self._decision_quality_fh = open(mobility_dir / "decision_quality.csv", "w", newline="", encoding="utf-8")
+                self._decision_quality_writer = csv.DictWriter(
+                    self._decision_quality_fh,
+                    fieldnames=self.DECISION_QUALITY_FIELDNAMES,
                     delimiter=self.CSV_DELIMITER,
                 )
-                self._mobility_writer.writeheader()
-                if self.write_legacy_mobility_detail_csvs:
-                    self._handover_fh = open(mobility_dir / "handover_results.csv", "w", newline="", encoding="utf-8")
-                    self._handover_writer = csv.DictWriter(self._handover_fh, fieldnames=self.HANDOVER_FIELDNAMES, delimiter=self.CSV_DELIMITER)
-                    self._handover_writer.writeheader()
-                    self._decision_quality_fh = open(mobility_dir / "decision_quality.csv", "w", newline="", encoding="utf-8")
-                    self._decision_quality_writer = csv.DictWriter(
-                        self._decision_quality_fh,
-                        fieldnames=self.DECISION_QUALITY_FIELDNAMES,
-                        delimiter=self.CSV_DELIMITER,
-                    )
-                    self._decision_quality_writer.writeheader()
+                self._decision_quality_writer.writeheader()
                 self.output_dir = output_dir
                 self.mobility_dir = mobility_dir
                 self._csv_rows_since_flush = 0
@@ -673,39 +637,17 @@ class ComparisonRunner(BaseScheduler):
         self._ensure_csv()
         full_row = {key: row.get(key, "") for key in self.FIELDNAMES}
         self._main_writer.writerow(full_row)
-        if self._csv_writer is not None:
-            self._csv_writer.writerow(full_row)
-        self._mobility_writer.writerow(self._mobility_row(row))
-        if self._handover_writer is not None:
-            self._handover_writer.writerow({key: row.get(key, "") for key in self.HANDOVER_FIELDNAMES})
-        if self._decision_quality_writer is not None:
-            self._decision_quality_writer.writerow(self._decision_quality_row(row))
+        self._csv_writer.writerow(full_row)
+        self._handover_writer.writerow({key: row.get(key, "") for key in self.HANDOVER_FIELDNAMES})
+        self._decision_quality_writer.writerow(self._decision_quality_row(row))
         self._decision_idx += 1
         self._csv_rows_since_flush += 1
         if self._csv_rows_since_flush >= self._csv_flush_interval:
             self._main_fh.flush()
-            if self._csv_fh is not None:
-                self._csv_fh.flush()
-            self._mobility_fh.flush()
-            if self._handover_fh is not None:
-                self._handover_fh.flush()
-            if self._decision_quality_fh is not None:
-                self._decision_quality_fh.flush()
+            self._csv_fh.flush()
+            self._handover_fh.flush()
+            self._decision_quality_fh.flush()
             self._csv_rows_since_flush = 0
-
-    def _mobility_row(self, row):
-        mobility_row = {key: row.get(key, "") for key in self.MOBILITY_FIELDNAMES}
-        mobility_row.update({
-            "decision_idx": self._decision_idx,
-            "handover_prev_bs": row.get("handover_prev_bs", ""),
-            "handover_chosen_cpu_util": row.get("handover_chosen_cpu_util", ""),
-            "handover_chosen_mem_util": row.get("handover_chosen_mem_util", ""),
-            "handover_oracle_cpu_util": row.get("handover_oracle_cpu_util", ""),
-            "handover_oracle_mem_util": row.get("handover_oracle_mem_util", ""),
-            "load_regret": row.get("regret", ""),
-            "handover_q_margin": row.get("handover_q_margin", ""),
-        })
-        return mobility_row
 
     def _decision_quality_row(self, row):
         return {
@@ -736,24 +678,14 @@ class ComparisonRunner(BaseScheduler):
         }
 
     def _close_csv(self):
-        if (
-            self._main_fh is None
-            and self._csv_fh is None
-            and self._mobility_fh is None
-            and self._handover_fh is None
-            and self._decision_quality_fh is None
-        ):
+        if self._csv_fh is None:
             return
         try:
             if self._main_fh is not None:
                 self._main_fh.flush()
                 self._main_fh.close()
-            if self._csv_fh is not None:
-                self._csv_fh.flush()
-                self._csv_fh.close()
-            if self._mobility_fh is not None:
-                self._mobility_fh.flush()
-                self._mobility_fh.close()
+            self._csv_fh.flush()
+            self._csv_fh.close()
             if self._handover_fh is not None:
                 self._handover_fh.flush()
                 self._handover_fh.close()
@@ -765,8 +697,6 @@ class ComparisonRunner(BaseScheduler):
             self._main_writer = None
             self._csv_fh = None
             self._csv_writer = None
-            self._mobility_fh = None
-            self._mobility_writer = None
             self._handover_fh = None
             self._handover_writer = None
             self._decision_quality_fh = None
@@ -1062,10 +992,10 @@ class ComparisonRunner(BaseScheduler):
             objectives = context.get("objective_delay", {}) or {}
             observed = context.get("observed_complete_delay", {}) or {}
             objective_delay_ms = float(
-                objectives.get(action, deadline_ms)
+                objectives.get(action, deadline_ms) or deadline_ms
             )
             observed_delay_ms = float(
-                observed.get(action, objective_delay_ms)
+                observed.get(action, objective_delay_ms) or objective_delay_ms
             )
             energy_breakdown = (
                 (context.get("energy_breakdown", {}) or {}).get(action, {}) or {}
@@ -1110,10 +1040,6 @@ class ComparisonRunner(BaseScheduler):
             )
             or 0.0
         )
-        # Missing services use a utilization sentinel in the state. They must
-        # not be charged as overloaded resources when no resource executed.
-        if action is None:
-            selected_future_util = 0.0
         # None selects the reward profile's end-to-end delay target.  The
         # task's radio_latency_target_ms is a radio-only SLA descriptor and
         # must not scale an end-to-end delay score.
@@ -1124,10 +1050,9 @@ class ComparisonRunner(BaseScheduler):
             # The learning delay score uses the approved objective.  Physical
             # feasibility is supplied separately through deadline_missed and
             # mobility_violation, both evaluated against observed completion.
-            complete_latency_ms=observed_delay_ms,
+            complete_latency_ms=objective_delay_ms,
             delay_target_ms=delay_target_ms,
             execution_failed=execution_failed,
-            invalid_action=bool(context.get("invalid_action", False)),
             deadline_missed=deadline_missed,
             device_battery_capacity_j=float(
                 getattr(task, "battery_capacity_j", 0.0) or 0.0
@@ -1159,12 +1084,8 @@ class ComparisonRunner(BaseScheduler):
                 energy_breakdown.get("server_hover_energy_j", 0.0) or 0.0
             ),
             selected_projected_utilization_percent=selected_future_util,
-            deadline_penalty_exempt=False,
         )
-        result = evaluate_reward(observation).as_dict()
-        result["forced_single_action"] = 0
-        result["deadline_penalty_exempt"] = 0
-        return result
+        return evaluate_reward(observation).as_dict()
 
     def _release_local_allocations(self, current_time):
         """Release completed onboard reservations for every device."""
@@ -1254,35 +1175,74 @@ class ComparisonRunner(BaseScheduler):
         return bool(ok)
 
     def _select_allocatable_action(self, selected_action, context, task):
-        """Attempt exactly the selected action, without a replacement tier."""
+        """Resolve the selected action, spilling only outward when saturated.
+
+        The policy remains free to choose any tier.  Spillover is an
+        operational safeguard applied identically in training and evaluation:
+        projected utilization at or above the configured soft threshold moves
+        the task to the next physically feasible tier.  Cloud is terminal.
+        """
+
         selected_action = int(selected_action)
         action_servers = context.get("action_servers", {}) or {}
-        physical = context.get("physical_mask", context.get("capacity_mask", []))
-        route = [selected_action]
-        if not (0 <= selected_action < len(physical)) or not physical[selected_action]:
-            return None, None, route
-        server = (
-            self._local_server(task) if selected_action == ACTION_LOCAL
-            else action_servers.get(selected_action)
+        mask = context.get("mask", []) or []
+        spillover_enabled = bool(
+            getattr(self.config, "COMPUTE_SPILLOVER_ENABLED", True)
         )
-        return (selected_action, server, route) if server is not None else (None, None, route)
+        configured_labels = tuple(
+            getattr(
+                self.config,
+                "COMPUTE_SPILLOVER_ORDER",
+                ("LOCAL_DEVICE", "MEC", "UAV_BS", "METRO", "CLOUD"),
+            )
+        )
+        ordered_actions = [label_to_action(label) for label in configured_labels]
+        terminal_action = label_to_action(
+            getattr(self.config, "COMPUTE_SPILLOVER_TERMINAL_TIER", "CLOUD")
+        )
+        threshold = float(
+            getattr(self.config, "COMPUTE_SPILLOVER_THRESHOLD_PERCENT", 95.0)
+        )
 
-    def _learn_attempt(self, state, action, reward, mask, task):
-        """Every attempted decision, including rejection, gets one transition."""
-        if not self.train_mode:
-            return None
-        transition = build_transition(
-            state=state, action=action, reward=reward, done=True,
-            next_state=None, mask=mask, next_mask=list(mask), task=task,
-            selected_tier=action_to_label(action),
-        )
-        loss = self.policy.learn(transition)
-        self.visualizer.log_step(
-            round_id=self.round_id, reward=reward, action=action,
-            epsilon=getattr(self.policy, "epsilon", None), loss=loss,
-            priority=getattr(task, "priority", 2),
-        )
-        return loss
+        if not spillover_enabled:
+            candidates = [selected_action]
+        elif selected_action in ordered_actions:
+            candidates = ordered_actions[ordered_actions.index(selected_action):]
+        elif selected_action == ACTION_MEC_COLLAB and ACTION_MEC in ordered_actions:
+            mec_index = ordered_actions.index(ACTION_MEC)
+            candidates = [selected_action, *ordered_actions[mec_index + 1:]]
+        else:
+            candidates = [selected_action]
+
+        route = []
+        last_feasible = None
+        future_utilization = context.get("future_util", {}) or {}
+        for candidate in candidates:
+            route.append(candidate)
+            if candidate < 0 or candidate >= len(mask) or int(mask[candidate]) != 1:
+                continue
+            server = (
+                self._local_server(task)
+                if candidate == ACTION_LOCAL
+                else action_servers.get(candidate)
+            )
+            if server is None:
+                continue
+            last_feasible = (candidate, server)
+            projected = float(future_utilization.get(candidate, 100.0) or 0.0)
+            if (
+                not spillover_enabled
+                or candidate == terminal_action
+                or projected < threshold
+            ):
+                return candidate, server, route
+
+        # A soft operating threshold must not create a new task failure when
+        # every reachable tier is busy.  Execute on the furthest physically
+        # feasible tier and let the reward record the saturation pressure.
+        if last_feasible is not None:
+            return last_feasible[0], last_feasible[1], route
+        return None, None, route
 
     @staticmethod
     def _local_server(task):
@@ -1361,8 +1321,21 @@ class ComparisonRunner(BaseScheduler):
             state, context = self.state_builder.build(task, servers, getattr(self, "mobility", None))
             mask = self.mask_builder.build(context)
             context["mask"] = list(mask)
-            context["forced_single_action"] = False
-            context["no_service_available"] = not any(context.get("physical_mask", []))
+            if sum(int(x) for x in mask) == 0:
+                task.fail()
+                task.network_failure_reason = "no_feasible_physical_action"
+                context["execution_failed"] = True
+                reward_info = self._evaluate_reward(task, None, context, force_failure=True)
+                reward = reward_info["reward"]
+                self.reward_log.append({"round": self.round_id, "reward": reward, "action": None, "priority": getattr(task, "priority", 2)})
+                reward_sum += reward
+                reward_count += 1
+                priority = int(getattr(task, "priority", 2) or 2)
+                if priority in priority_reward_sums:
+                    priority_reward_sums[priority] += reward
+                    priority_reward_counts[priority] += 1
+                self._append_row(self._row(task, None, None, None, [], context, mask, reward, "failed", reward_info=reward_info))
+                continue
             selected_action = int(self.policy.select_action(state, mask))
             action, server, route = self._select_allocatable_action(selected_action, context, task)
             context["selected_action"] = selected_action
@@ -1373,26 +1346,10 @@ class ComparisonRunner(BaseScheduler):
             if action is None or server is None:
                 task.fail()
                 task.network_failure_reason = "selected_action_not_physically_feasible"
-                if context["no_service_available"]:
-                    task.network_failure_reason = "no_service_available"
-                context["invalid_action"] = not context["no_service_available"]
                 context["execution_failed"] = True
-                reward_info = self._evaluate_reward(task, None, context, selected_action=selected_action, force_failure=True)
+                reward_info = self._evaluate_reward(task, None, context, force_failure=True)
                 reward = reward_info["reward"]
-                loss = self._learn_attempt(state, selected_action, reward, mask, task)
-                if loss is not None:
-                    last_loss = loss
-                priority = int(getattr(task, "priority", 2) or 2)
-                label = action_to_label(selected_action)
-                action_counts[label] += 1
-                if priority in priority_action_counts:
-                    priority_action_counts[priority][label] += 1
-                    priority_reward_sums[priority] += reward
-                    priority_reward_counts[priority] += 1
-                eps = getattr(self.policy, "epsilon", None)
-                if eps is not None:
-                    self.epsilon_log.append({"round": self.round_id, "epsilon": float(eps)})
-                self.reward_log.append({"round": self.round_id, "reward": reward, "action": selected_action, "priority": priority})
+                self.reward_log.append({"round": self.round_id, "reward": reward, "action": None, "priority": getattr(task, "priority", 2)})
                 reward_sum += reward
                 reward_count += 1
                 self._append_row(self._row(task, selected_action, None, None, route, context, mask, reward, "failed", reward_info=reward_info))
@@ -1435,6 +1392,16 @@ class ComparisonRunner(BaseScheduler):
                     task.fail()
                     task.network_failure_reason = "compute_admission_failed"
                     context["execution_failed"] = True
+                    reward_info = self._evaluate_reward(
+                        task,
+                        action,
+                        context,
+                        selected_action=selected_action,
+                        force_failure=True,
+                    )
+                    reward = reward_info["reward"]
+                    self._append_row(self._row(task, selected_action, action, server, route, context, mask, reward, "failed", reward_info=reward_info))
+                    continue
 
             reward_info = self._evaluate_reward(
                 task,
@@ -1488,10 +1455,41 @@ class ComparisonRunner(BaseScheduler):
                     self.mobility.entities[int(task.entity_id)].battery_remaining_j = task.battery_remaining_j
                 except Exception:
                     pass
-            loss = self._learn_attempt(state, selected_action, reward, mask, task)
-            if loss is not None:
-                last_loss = loss
+            loss = None
+            if self.train_mode:
+                next_state, next_context = self.state_builder.build(task, servers, getattr(self, "mobility", None))
+                next_mask = self.mask_builder.build(next_context)
+                transition = build_transition(
+                    state=state,
+                    # Credit belongs to the policy's decision.  The executed
+                    # action can be an automatic outward spillover.
+                    action=selected_action,
+                    reward=reward,
+                    next_state=next_state,
+                    # Each offloading decision is an independent, immediate-reward
+                    # episode: the reward realizes now and there is no continuation
+                    # for THIS task's decision. Marking it terminal gives every
+                    # model correct one-step credit (no bootstrap/return chaining
+                    # across unrelated tasks batched together).
+                    done=True,
+                    mask=mask,
+                    next_mask=next_mask,
+                    task=task,
+                    selected_tier=action_to_label(selected_action),
+                )
+                loss = self.policy.learn(transition)
+                if loss is not None:
+                    last_loss = loss
             eps = getattr(self.policy, "epsilon", None)
+            if self.train_mode:
+                self.visualizer.log_step(
+                    round_id=self.round_id,
+                    reward=reward,
+                    action=selected_action,
+                    epsilon=eps,
+                    loss=loss,
+                    priority=getattr(task, "priority", 2),
+                )
             self.reward_log.append({"round": self.round_id, "reward": reward, "action": selected_action, "priority": getattr(task, "priority", 2)})
             if eps is not None:
                 self.epsilon_log.append({"round": self.round_id, "epsilon": float(eps)})
@@ -1508,11 +1506,11 @@ class ComparisonRunner(BaseScheduler):
                 "completed"
                 if execution is not None and task.status == "completed"
                 else "failed"
-                if execution is not None or not allocation_succeeded
+                if execution is not None
                 else "assigned"
             )
             self._append_row(self._row(task, selected_action, action, server, route, context, mask, reward, row_status, reward_info=reward_info))
-            if allocation_succeeded:
+            if execution is None or allocation_succeeded:
                 assignments.append((task, server))
 
         action_labels = [action_to_label(i) for i in range(self.action_dim)]
@@ -1658,15 +1656,10 @@ class ComparisonRunner(BaseScheduler):
         e2e_incl_tx_ms = float(delay_parts.get("total_ms_incl_tx", 0.0) or 0.0) if action is not None else ""
         complete_latency_ms = float(delay_parts.get("complete_latency_ms", e2e_incl_tx_ms) or 0.0) if action is not None else ""
         observed_complete_latency_ms = float(delay_parts.get("observed_complete_latency_ms", e2e_incl_tx_ms) or 0.0) if action is not None else ""
-        # Both operands are "" on the no-action (allocation failed) path, so the
-        # subtraction must coerce first -- exactly like every other numeric
-        # column above. Without this the failure path raises
-        # "TypeError: unsupported operand type(s) for -: 'str' and 'float'".
-        e2e_no_processing_ms = max(
-            0.0,
-            float(e2e_incl_tx_ms or 0.0) - processing_component_ms
+        e2e_no_processing_ms = (
+            max(0.0, e2e_incl_tx_ms - processing_component_ms)
             if realized_basis and action is not None
-            else float(observed_complete_latency_ms or 0.0) - processing_component_ms,
+            else max(0.0, observed_complete_latency_ms - processing_component_ms)
         )
 
         # ---- Mobility / handover decision-quality (from HandoverScheduler
@@ -1679,6 +1672,7 @@ class ComparisonRunner(BaseScheduler):
         mobility_violation = int(bool(
             remaining_dwell_ms != "" and remaining_dwell_ms is not None
             and observed_complete_latency_ms != ""
+            and float(remaining_dwell_ms or 0.0) > 0.0
             and float(observed_complete_latency_ms or 0.0) > float(remaining_dwell_ms or 0.0)
             and mobility_wireless_action
         ))
@@ -1916,9 +1910,6 @@ class ComparisonRunner(BaseScheduler):
             "reward_util_reward": reward_info.get("util_reward", ""),
             "reward_overutilization_penalty": reward_info.get("overutilization_pen", ""),
             "reward_overutilization_weight": reward_info.get("overutilization_weight", ""),
-            "reward_overutilization_deduction_points": reward_info.get("overutilization_deduction_points", ""),
-            "reward_schema_version": REWARD_SCHEMA_VERSION,
-            "no_service_available": int(context.get("no_service_available", False)),
             "reward_invalid_action_penalty": reward_info.get("invalid_pen", ""),
             # Keep the three legacy column names populated for downstream
             # notebooks, and also report every canonical objective explicitly.
@@ -1930,9 +1921,9 @@ class ComparisonRunner(BaseScheduler):
             "reward_compute_weight": reward_info.get("compute_weight", ""),
             "reward_mobility_weight": reward_info.get("mobility_weight", ""),
             "only_cloud_feasible": int(
-                bool(physical_mask) and int(sum(physical_mask)) == 1 and len(physical_mask) > ACTION_CLOUD and int(physical_mask[ACTION_CLOUD]) == 1
+                bool(mask) and int(sum(mask)) == 1 and len(mask) > ACTION_CLOUD and int(mask[ACTION_CLOUD]) == 1
             ),
-            "collab_feasible": int(len(physical_mask) > ACTION_MEC_COLLAB and int(physical_mask[ACTION_MEC_COLLAB]) == 1),
+            "collab_feasible": int(len(mask or []) > ACTION_MEC_COLLAB and int(mask[ACTION_MEC_COLLAB]) == 1),
             "chosen_layer": int(action) + 1 if action is not None else "",
             "overflow_used": int(spillover_used),
             "overflow_route": (
@@ -1949,7 +1940,7 @@ class ComparisonRunner(BaseScheduler):
             "overflow_fragment_cpu_util": "",
             "overflow_fragment_mem_util": "",
             "collab_checked": int(ACTION_MEC_COLLAB in route),
-            "collab_found": int(physical_mask[ACTION_MEC_COLLAB] == 1) if len(physical_mask) > ACTION_MEC_COLLAB else 0,
+            "collab_found": int(mask[ACTION_MEC_COLLAB] == 1) if len(mask) > ACTION_MEC_COLLAB else 0,
             "collab_used": int(action == ACTION_MEC_COLLAB),
             "collab_dst_id": server_id if action == ACTION_MEC_COLLAB else "",
             "collab_t_budget": deadline_ms if action == ACTION_MEC_COLLAB else "",
@@ -2176,38 +2167,30 @@ class ComparisonRunner(BaseScheduler):
             "cloud_peak_future": future.get(ACTION_CLOUD, ""),
             "uav_peak_future": future.get(ACTION_UAV_BS, ""),
             "local_compute_capable": getattr(task, "local_compute_capable", False),
-            "mec_available": int(physical_mask[ACTION_MEC] == 1) if len(physical_mask) > ACTION_MEC else 0,
-            "metro_available": int(physical_mask[ACTION_METRO] == 1) if len(physical_mask) > ACTION_METRO else 0,
-            "cloud_available": int(physical_mask[ACTION_CLOUD] == 1) if len(physical_mask) > ACTION_CLOUD else 0,
-            "uav_available": int(physical_mask[ACTION_UAV_BS] == 1) if len(physical_mask) > ACTION_UAV_BS else 0,
-            "bs_ok": int(physical_mask[ACTION_MEC] == 1) if len(physical_mask) > ACTION_MEC else 0,
-            "me_ok": int(physical_mask[ACTION_METRO] == 1) if len(physical_mask) > ACTION_METRO else 0,
+            "mec_available": int(mask[ACTION_MEC] == 1) if len(mask) > ACTION_MEC else 0,
+            "metro_available": int(mask[ACTION_METRO] == 1) if len(mask) > ACTION_METRO else 0,
+            "cloud_available": int(mask[ACTION_CLOUD] == 1) if len(mask) > ACTION_CLOUD else 0,
+            "uav_available": int(mask[ACTION_UAV_BS] == 1) if len(mask) > ACTION_UAV_BS else 0,
+            "bs_ok": int(mask[ACTION_MEC] == 1) if len(mask) > ACTION_MEC else 0,
+            "me_ok": int(mask[ACTION_METRO] == 1) if len(mask) > ACTION_METRO else 0,
             "success": int(status in ("assigned", "completed") and not deadline_missed),
             "dropped": int(status not in ("assigned", "completed")),
             "deadline_missed": deadline_missed,
             "status": status,
-            "zone_id": getattr(task, "zone_id", ""),
-            "sat_available": getattr(task, "sat_available", ""),
-            "sat_elevation_deg": getattr(task, "sat_elevation_deg", ""),
-            "sat_slant_range_m": getattr(task, "sat_slant_range_m", ""),
-            "sat_access_node": getattr(task, "sat_access_node", ""),
-            "sat_selected": int(action == ACTION_SAT) if action is not None else 0,
-            "reward_forced_single_action": int(reward_info.get("forced_single_action", 0) or 0),
-            "reward_deadline_penalty_exempt": int(reward_info.get("deadline_penalty_exempt", 0) or 0),
         }
         return row
 
     def save(self):
-        model_dir = Path(getattr(self.config, "CHECKPOINT_ROOT", "trained_model")) / REWARD_SCHEMA_VERSION
+        model_dir = self.checkpoint_root
         model_dir.mkdir(parents=True, exist_ok=True)
         self.policy.save(model_dir / f"{self.model_name}_comparison_policy.pt")
 
     def load(self):
-        if self.model_name in ("random", "rule_based"):
+        if self.model_name == "random":
             return
-        path = Path(getattr(self.config, "CHECKPOINT_ROOT", "trained_model")) / REWARD_SCHEMA_VERSION / f"{self.model_name}_comparison_policy.pt"
-        if not path.exists():
-            raise FileNotFoundError(f"Train a fresh {REWARD_SCHEMA_VERSION} policy before evaluation: {path}")
+        path = self.checkpoint_root / f"{self.model_name}_comparison_policy.pt"
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing trained policy: {path}")
         self.policy.load(path)
 
     def save_logs(self, output_dir=None, include_plots=None):
@@ -2217,16 +2200,15 @@ class ComparisonRunner(BaseScheduler):
         # inside a model folder.
         include_plots = False
 
-        if self.train_mode or bool(getattr(self.config, "WRITE_EVALUATION_TRAINING_METRICS", False)):
-            TrainingReporter(out_dir).save_offloading_training(
-                self.model_name,
-                reward_log=self.reward_log,
-                epsilon_log=self.epsilon_log,
-                action_dist_log=self.action_dist_log,
-                loss_log=self.loss_log,
-                include_plots=include_plots,
-                visualizer=self.visualizer,
-            )
+        TrainingReporter(out_dir).save_offloading_training(
+            self.model_name,
+            reward_log=self.reward_log,
+            epsilon_log=self.epsilon_log,
+            action_dist_log=self.action_dist_log,
+            loss_log=self.loss_log,
+            include_plots=include_plots,
+            visualizer=self.visualizer,
+        )
     def _write_diagnostics(self, output_dir):
         # Per-run policy diagnostics. Best-effort; never breaks a run.
         import json
@@ -2255,13 +2237,12 @@ class ComparisonRunner(BaseScheduler):
             if self.train_mode:
                 self.save()
             self.save_logs(output_dir=self.output_dir, include_plots=False)
-            if bool(getattr(self.config, "WRITE_DIAGNOSTICS_JSON", False)):
-                self._write_diagnostics(self.output_dir)
+            self._write_diagnostics(self.output_dir)
         finally:
             self._close_csv()
 
 
-def create_comparison_scheduler(model_name, config=default_config, output_dir=None, train_mode=False, seed=None, logger=print):
+def create_comparison_scheduler(model_name, config=default_config, output_dir=None, train_mode=False, seed=None, logger=print, checkpoint_root=None, strict_load=False):
     scheduler_type = str(model_name).strip().lower()
     if seed is not None:
         set_global_seed(seed)
@@ -2275,8 +2256,14 @@ def create_comparison_scheduler(model_name, config=default_config, output_dir=No
         config=config,
         output_dir=output_dir,
         seed=seed,
+        checkpoint_root=checkpoint_root,
     )
     if not bool(train_mode) and hasattr(scheduler, "load"):
-        scheduler.load()
+        try:
+            scheduler.load()
+        except Exception as exc:
+            if strict_load:
+                raise
+            logger(f"[LOAD] No trained model loaded for {scheduler_type}: {exc}")
     scheduler.set_train_mode(bool(train_mode))
     return scheduler

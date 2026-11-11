@@ -466,8 +466,6 @@ class LiveMap:
         self.groundRen.draw()
         self.buildRen.draw()
         self.roadRen.draw()
-        # 3b) satellite-IoT service zones + LEO satellite marker
-        self._draw_zones()
 
         # 4) assign server colors first -- devices color themselves by their
         # attached base station, so the palette must exist before they draw.
@@ -489,46 +487,6 @@ class LiveMap:
         self._update_counts()
         self._update_kind_counts()
         self._update_gauges()
-
-    def _draw_zones(self):
-        """Tint the cellular / UAV / remote service zones and mark the LEO satellite."""
-        try:
-            from config import zones as zone_config
-        except Exception:
-            return
-        self.canvas.delete("zone")
-        if not zone_config.ZONES_ENABLED:
-            return
-        L = self.layout
-        for zone_id in zone_config.ZONE_ORDER:
-            zone = zone_config.ZONES[zone_id]
-            x0, x1, y0, y1 = zone["extent_m"]
-            cx0, cy0, cx1, cy1 = L.sx(x0), L.sy(y1), L.sx(x1), L.sy(y0)
-            self.canvas.create_rectangle(
-                cx0, cy0, cx1, cy1, fill=zone.get("color", "#e5e7eb"), stipple="gray50",
-                outline="#64748b", dash=(6, 4), width=2, tags=("zone",),
-            )
-            self.canvas.create_text(
-                (cx0 + cx1) / 2.0, cy0 + 14, text=zone.get("label", zone_id),
-                font=("Segoe UI", 10, "bold"), fill="#334155", tags=("zone",),
-            )
-        if getattr(self.sim, "satellite_enabled", False):
-            # LEO satellite glyph above the remote zone, with live pass elevation.
-            x0, x1, y0, y1 = zone_config.ZONES["remote"]["extent_m"]
-            cx, cy = (L.sx(x0) + L.sx(x1)) / 2.0, L.sy(y1) + 44
-            c = self.canvas
-            c.create_rectangle(cx - 7, cy - 6, cx + 7, cy + 6, fill="#f59e0b", outline="#92400e", tags=("zone",))
-            c.create_rectangle(cx - 27, cy - 4, cx - 9, cy + 4, fill="#1d4ed8", outline="#1e3a8a", tags=("zone",))
-            c.create_rectangle(cx + 9, cy - 4, cx + 27, cy + 4, fill="#1d4ed8", outline="#1e3a8a", tags=("zone",))
-            elev = float(getattr(self.sim, "sat_elevation_deg", 0.0) or 0.0)
-            slant_km = float(getattr(self.sim, "sat_slant_range_m", 0.0) or 0.0) / 1000.0
-            c.create_text(cx, cy + 18, text=f"LEO-600  elev {elev:.0f}\u00b0  {slant_km:.0f} km",
-                          font=("Segoe UI", 9), fill="#334155", tags=("zone",))
-        # Keep the tint above the static city layers but below devices/servers.
-        for layer in ("streetlight", "crossing", "sidewalk", "road", "building", "ground", "sky"):
-            if self.canvas.find_withtag(layer):
-                self.canvas.tag_raise("zone", layer)
-                break
 
     def _draw_links(self):
         """

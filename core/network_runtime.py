@@ -48,7 +48,7 @@ from network import (
 
 
 _ACCESS_NODE_KINDS = frozenset(
-    {NodeKind.ACCESS_TOWER, NodeKind.MEC, NodeKind.UAV_BS, NodeKind.NTN}
+    {NodeKind.ACCESS_TOWER, NodeKind.MEC, NodeKind.UAV_BS}
 )
 
 _RADIO_POWER_PROFILE_BY_NODE_KIND = {
@@ -56,8 +56,6 @@ _RADIO_POWER_PROFILE_BY_NODE_KIND = {
     NodeKind.ACCESS_TOWER: "access_radio_default",
     NodeKind.MEC: "access_radio_default",
     NodeKind.UAV_BS: "uav_bs_radio_default",
-    NodeKind.NTN: "ntn_radio_default",
-    NodeKind.SAT_GATEWAY: "sat_gateway_radio_default",
 }
 
 

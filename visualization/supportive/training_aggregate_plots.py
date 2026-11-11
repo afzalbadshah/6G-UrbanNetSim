@@ -61,10 +61,6 @@ def discover_seed_runs(phase_dir: str | Path, model: str) -> dict[str, Path]:
     """Return ordered seed labels and model folders that contain training output."""
     phase_path = Path(phase_dir)
     runs: dict[str, Path] = {}
-    flat_model_dir = phase_path / "offloading" / str(model)
-    if flat_model_dir.is_dir():
-        # Flat single-seed training run: <run>/offloading/<model>.
-        runs["seed_1"] = flat_model_dir
     for seed_dir in sorted(phase_path.glob("seed_*"), key=_seed_number):
         model_dir = seed_dir / "offloading" / str(model)
         if model_dir.is_dir():
@@ -75,7 +71,7 @@ def discover_seed_runs(phase_dir: str | Path, model: str) -> dict[str, Path]:
 def discover_models(phase_dir: str | Path) -> list[str]:
     """Return model names found under any seed, using the standard display order."""
     names: set[str] = set()
-    for seed_dir in [Path(phase_dir), *Path(phase_dir).glob("seed_*")]:
+    for seed_dir in Path(phase_dir).glob("seed_*"):
         offloading_dir = seed_dir / "offloading"
         if offloading_dir.is_dir():
             names.update(path.name for path in offloading_dir.iterdir() if path.is_dir())
@@ -95,17 +91,6 @@ def _read_available_columns(path: Path, delimiter: str, requested: Iterable[str]
         return pd.read_csv(path, sep=delimiter, usecols=available)
     except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
         return pd.DataFrame()
-
-
-def _read_training_metrics(model_dir: Path, metric_group: str, requested: Iterable[str]) -> pd.DataFrame:
-    """Read one metric group from consolidated training_metrics.csv."""
-    columns = ("metric_group", *tuple(requested))
-    frame = _read_available_columns(model_dir / "training_metrics.csv", ",", columns)
-    if frame.empty or "metric_group" not in frame.columns:
-        return pd.DataFrame()
-    group_rows = frame["metric_group"].astype(str) == str(metric_group)
-    frame = frame.loc[group_rows, [name for name in requested if name in frame.columns]]
-    return frame.reset_index(drop=True)
 
 
 def _numeric_column(frame: pd.DataFrame, name: str) -> pd.Series:
@@ -136,12 +121,10 @@ def load_reward_curves(
     """Load per-seed round-average reward, optionally for one service priority."""
     curves: dict[str, pd.Series] = {}
     for seed_label, model_dir in discover_seed_runs(phase_dir, model).items():
-        frame = _read_training_metrics(model_dir, "reward", ("round", "reward", "priority"))
-        if frame.empty:
-            reward_path = model_dir / f"{model}_reward_log.csv"
-            frame = _read_available_columns(
-                reward_path, ",", ("round", "reward", "priority")
-            )
+        reward_path = model_dir / f"{model}_reward_log.csv"
+        frame = _read_available_columns(
+            reward_path, ",", ("round", "reward", "priority")
+        )
         if frame.empty:
             frame = _read_available_columns(
                 model_dir / "results.csv", ";", ("round", "reward", "priority")
@@ -161,11 +144,9 @@ def load_exploration_curves(phase_dir: str | Path, model: str) -> dict[str, pd.S
     """Load the actual epsilon trace recorded by each seed, when the model provides it."""
     curves: dict[str, pd.Series] = {}
     for seed_label, model_dir in discover_seed_runs(phase_dir, model).items():
-        frame = _read_training_metrics(model_dir, "epsilon", ("round", "epsilon"))
-        if frame.empty:
-            frame = _read_available_columns(
-                model_dir / f"{model}_epsilon_decay.csv", ",", ("round", "epsilon")
-            )
+        frame = _read_available_columns(
+            model_dir / f"{model}_epsilon_decay.csv", ",", ("round", "epsilon")
+        )
         curve = _round_series(frame, "epsilon")
         if not curve.empty:
             curves[seed_label] = curve
@@ -177,10 +158,8 @@ def load_action_frames(phase_dir: str | Path, model: str) -> dict[str, pd.DataFr
     frames: dict[str, pd.DataFrame] = {}
     requested = ("round", "priority", "priority_class", *ACTION_LABEL_LIST)
     for seed_label, model_dir in discover_seed_runs(phase_dir, model).items():
-        frame = _read_training_metrics(model_dir, "action_distribution", requested)
-        if frame.empty:
-            path = model_dir / f"{model}_action_distribution.csv"
-            frame = _read_available_columns(path, ",", requested)
+        path = model_dir / f"{model}_action_distribution.csv"
+        frame = _read_available_columns(path, ",", requested)
         if frame.empty or "round" not in frame.columns:
             continue
         if "priority_class" in frame.columns:

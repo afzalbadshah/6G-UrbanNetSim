@@ -155,9 +155,6 @@ DEVICE_PROFILES = {
         # battery trade-off instead of masking the local action completely.
         "local_compute": {"capable": True, "cpu": 400, "memory": 256, "power_w": 0.12},
         "battery": {"capacity_j": 0.77, "initial_j": 0.74},
-        # Small solar cell: ~2 mW day/night average harvested (satellite-IoT
-        # extension). Charged once per round, capped at capacity.
-        "energy_harvest_w": 0.002,
         "radio_energy": {"tx_power_w": 0.10, "rx_power_w": 0.03, "idle_power_w": 0.002},
         "mobility": {"profile": "fixed", "kind": "stationary", "speed_m_s": (0.0, 0.0), "pause_s": (600, 3600), "handover_sensitivity": 0.02, "dwell_weight": 0.05},
     },
@@ -233,41 +230,6 @@ DEVICE_PROFILES = {
         "radio_energy": {"tx_power_w": 0.65, "rx_power_w": 0.25, "idle_power_w": 0.04},
         # Pedestrians walk along a horizontal sidewalk only (no vertical movement).
         "mobility": {"profile": "pedestrian", "kind": "pedestrian", "speed_m_s": (0.5, 2.2), "pause_s": (1, 20), "handover_sensitivity": 0.35, "dwell_weight": 1.0},
-    },
-    # ------------------------------------------------------------------
-    # Satellite-IoT environmental monitoring devices (UAV / remote zones).
-    # weight 0.0 -> never spawned in the city mix; config/zones.py
-    # ZONE_DEVICE_WEIGHTS spawns them in the UAV and remote zones.
-    # ------------------------------------------------------------------
-    "disaster_alert_sensor": {
-        "service_class": "URLLC",
-        "weight": 0.0,
-        "application_type": "flood_wildfire_landslide_alert",
-        "power_source": "battery_or_solar",
-        "radio_type": "nb_iot_ntn",
-        "reporting_pattern": {"period_s": (0.5, 5.0), "burst_probability": 0.30},
-        "workload": {"data_multiplier": 0.30, "cpu_multiplier": 1.00, "memory_per_kb": 0.20},
-        # Low-power edge-AI MCU (event detection on raw readings) -- can run the
-        # alert task itself, but slowly; offloading is a learned trade-off.
-        "local_compute": {"capable": True, "cpu": 1_500, "memory": 512, "power_w": 0.5},
-        "battery": {"capacity_j": 5.0, "initial_j": 4.8},
-        "energy_harvest_w": 0.002,   # small solar cell, ~2 mW average
-        "radio_energy": {"tx_power_w": 0.20, "rx_power_w": 0.05, "idle_power_w": 0.003},
-        "mobility": {"profile": "fixed", "kind": "stationary", "speed_m_s": (0.0, 0.0), "pause_s": (600, 3600), "handover_sensitivity": 0.02, "dwell_weight": 0.05},
-    },
-    "camera_trap": {
-        "service_class": "eMBB",
-        "weight": 0.0,
-        "application_type": "wildlife_fire_camera_imagery",
-        "power_source": "solar",
-        "radio_type": "ka_band_vsat",
-        # Image/video analytics: same heavy profile as a city smart camera.
-        "workload": {"data_multiplier": 1.80, "cpu_multiplier": 16.0, "memory_per_kb": 0.32},
-        "reporting_pattern": {"period_s": (1.0, 10.0), "burst_probability": 0.40},
-        "local_compute": {"capable": True, "cpu": 5_000, "memory": 4_096, "power_w": 6.0},
-        "battery": {"capacity_j": 0.0, "initial_j": 0.0},
-        "radio_energy": {"tx_power_w": 1.00, "rx_power_w": 0.30, "idle_power_w": 0.05},
-        "mobility": {"profile": "fixed", "kind": "stationary", "speed_m_s": (0.0, 0.0), "pause_s": (600, 3600), "handover_sensitivity": 0.03, "dwell_weight": 0.1},
     },
 }
 

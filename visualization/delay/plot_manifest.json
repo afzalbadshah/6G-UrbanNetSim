@@ -1,0 +1,376 @@
+{
+  "created_utc": "2026-10-28T12:59:10.243232+00:00",
+  "direction": "delay",
+  "evaluation_phase": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "models": [
+    "dqn",
+    "double_dqn",
+    "ppo",
+    "a2c",
+    "q_learning",
+    "random"
+  ],
+  "sources": [
+    {
+      "seed_index": 1,
+      "model": "dqn",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\dqn\\results.csv",
+      "sha256": "868340f55282984e7ca7b6618f6ebd1cfa2037a5fdad5408850714c23bd16c3f",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 1,
+      "model": "double_dqn",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\double_dqn\\results.csv",
+      "sha256": "36fd95cd29952777a93abf32fa66b933ccbf7d4906ef3b0eea18bd6d25bc9467",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 1,
+      "model": "ppo",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\ppo\\results.csv",
+      "sha256": "1609faec30003ad4dbee51b050a8b7da446e286b04e34158a93ec1c02a2610a0",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 1,
+      "model": "a2c",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\a2c\\results.csv",
+      "sha256": "afc05fc7d604bf300d306a118cce20953f48484b422cccd3d58c65235e308917",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 1,
+      "model": "q_learning",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\q_learning\\results.csv",
+      "sha256": "00c85beb7622cf17769e803405af52d77f855b4bbc57d0f0804868e023a8c250",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 1,
+      "model": "random",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\random\\results.csv",
+      "sha256": "c16e8892b0edb44f8e6ba5b8e6f35443aa2a99cade01faf5abd04b4713ad1905",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 2,
+      "model": "dqn",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_2\\offloading\\dqn\\results.csv",
+      "sha256": "2323c1e1e3b2273acfe2a3db2a0e1437d9a7abdd5aa73d7f24d44eac28257161",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 2,
+      "model": "double_dqn",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_2\\offloading\\double_dqn\\results.csv",
+      "sha256": "8f3bbf3617fa8b02d72c7c0f21542c1ba597e5bd2574a7bbcd17ec0586c50b69",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 2,
+      "model": "ppo",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_2\\offloading\\ppo\\results.csv",
+      "sha256": "0ad93dd7503598d627b38d06825d2731105ce1a9b5c353118e4813a04eb7fec0",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 2,
+      "model": "a2c",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_2\\offloading\\a2c\\results.csv",
+      "sha256": "48e886061116283736e426df7a2d2b63a6452c377107721999bd44d5bd2e7481",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 2,
+      "model": "q_learning",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_2\\offloading\\q_learning\\results.csv",
+      "sha256": "a09348bdd65fc6daaace9751bb8e4423fb002edd6ae23f406811cd5184bb18a8",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 2,
+      "model": "random",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_2\\offloading\\random\\results.csv",
+      "sha256": "d9acb7e5efa097e564ca66b982eede1561db14933a4bc4359c524b7c0f7d0bea",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 3,
+      "model": "dqn",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_3\\offloading\\dqn\\results.csv",
+      "sha256": "6d4c8c55ee2d101bd55489499646f412725fc8b701c88c5d949cfb7c8e806153",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 3,
+      "model": "double_dqn",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_3\\offloading\\double_dqn\\results.csv",
+      "sha256": "e9e9d558619e40bea1b28f4421e439c08bde55f4f65531d33fcec5ca6a6752e9",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 3,
+      "model": "ppo",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_3\\offloading\\ppo\\results.csv",
+      "sha256": "f98461561552c90ba2f73c240468a624e546c12fa800f974f053649430b6960d",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 3,
+      "model": "a2c",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_3\\offloading\\a2c\\results.csv",
+      "sha256": "043609bff8d8dccb0b10ce0f7d8d13360faea6823e99656ce17267da391469af",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 3,
+      "model": "q_learning",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_3\\offloading\\q_learning\\results.csv",
+      "sha256": "39608ffa4eb500b69ac3c26248beb56896f5c570c0b8de22549fc1609fe1d88d",
+      "attempts": 20100
+    },
+    {
+      "seed_index": 3,
+      "model": "random",
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_3\\offloading\\random\\results.csv",
+      "sha256": "bc784e7560918d99112a9e69ccc7d16f3de62af36a6ae07ea4d0bb10843e3f1a",
+      "attempts": 20100
+    }
+  ],
+  "workload": "Offered computation summed over all generated task attempts per round, divided by 1e9",
+  "interpretation": "Existing device count and eMBB payload grow together: coupled workload ramp, not an independent workload sweep.",
+  "latency_population": "Completed tasks only; outcome figures retain all generated attempts.",
+  "axes": "Success line charts use explicitly labelled restricted y ranges for visibility; bar charts start at zero. Battery ECDF uses symlog x with 0.01 percentage-point linear threshold.",
+  "uncertainty": "Environmental seed mean and observed min\u2013max; not a confidence interval or independent training variation.",
+  "battery_population": "Battery distributions/charge exclude mains-powered records with nonpositive rated battery capacity. Same device identities and exposure across models within each seed; active durations vary within a seed.",
+  "export": {
+    "format": "png",
+    "layout": "one measured panel per file",
+    "titles": false,
+    "resolution_dpi": 300
+  },
+  "panels": [
+    {
+      "id": "R1a",
+      "title": "URLLC: deadline success",
+      "plot_type": "line with seed range",
+      "status": "generated",
+      "reason": null,
+      "group": "R1_Deadline_reliability",
+      "filename": "URLLC - deadline success.png"
+    },
+    {
+      "id": "R1b",
+      "title": "mMTC: deadline success",
+      "plot_type": "line with seed range",
+      "status": "generated",
+      "reason": null,
+      "group": "R1_Deadline_reliability",
+      "filename": "mMTC - deadline success.png"
+    },
+    {
+      "id": "R1c",
+      "title": "eMBB: deadline success",
+      "plot_type": "line with seed range",
+      "status": "generated",
+      "reason": null,
+      "group": "R1_Deadline_reliability",
+      "filename": "eMBB - deadline success.png"
+    },
+    {
+      "id": "R1d",
+      "title": "Lower-tail device success",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R1_Deadline_reliability",
+      "filename": "Lower-tail device success.png"
+    },
+    {
+      "id": "R2a",
+      "title": "URLLC: full latency tail",
+      "plot_type": "CCDF",
+      "status": "generated",
+      "reason": null,
+      "group": "R2_Latency_distributions_and_tails",
+      "filename": "URLLC - full latency tail.png"
+    },
+    {
+      "id": "R2b",
+      "title": "mMTC: full latency tail",
+      "plot_type": "CCDF",
+      "status": "generated",
+      "reason": null,
+      "group": "R2_Latency_distributions_and_tails",
+      "filename": "mMTC - full latency tail.png"
+    },
+    {
+      "id": "R2c",
+      "title": "eMBB: full latency tail",
+      "plot_type": "CCDF",
+      "status": "generated",
+      "reason": null,
+      "group": "R2_Latency_distributions_and_tails",
+      "filename": "eMBB - full latency tail.png"
+    },
+    {
+      "id": "R2d",
+      "title": "Completion latency P99",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R2_Latency_distributions_and_tails",
+      "filename": "Completion latency P99.png"
+    },
+    {
+      "id": "R3a",
+      "title": "Transmission and propagation",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R3_Sources_of_delay",
+      "filename": "Transmission and propagation.png"
+    },
+    {
+      "id": "R3b",
+      "title": "Queueing",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R3_Sources_of_delay",
+      "filename": "Queueing.png"
+    },
+    {
+      "id": "R3c",
+      "title": "Processing",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R3_Sources_of_delay",
+      "filename": "Processing.png"
+    },
+    {
+      "id": "R3d",
+      "title": "Handover",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R3_Sources_of_delay",
+      "filename": "Handover.png"
+    },
+    {
+      "id": "R4a",
+      "title": "On-time, late and failed tasks",
+      "plot_type": "stacked bars",
+      "status": "generated",
+      "reason": null,
+      "group": "R4_Unsuccessful_service",
+      "filename": "On-time, late and failed tasks.png"
+    },
+    {
+      "id": "R4b",
+      "title": "Recorded failure causes",
+      "plot_type": "heatmap",
+      "status": "generated",
+      "reason": null,
+      "group": "R4_Unsuccessful_service",
+      "filename": "Recorded failure causes.png"
+    },
+    {
+      "id": "R4c",
+      "title": "Late completion under workload",
+      "plot_type": "line with seed range",
+      "status": "generated",
+      "reason": null,
+      "group": "R4_Unsuccessful_service",
+      "filename": "Late completion under workload.png"
+    },
+    {
+      "id": "R4d",
+      "title": "Unsuccessful-update bursts",
+      "plot_type": "ECDF of longest per-device streak",
+      "status": "generated",
+      "reason": null,
+      "group": "R4_Unsuccessful_service",
+      "filename": "Unsuccessful-update bursts.png"
+    },
+    {
+      "id": "R5a",
+      "title": "Application deadline tightness",
+      "plot_type": "controlled line",
+      "status": "pending",
+      "reason": "Requires independently varied deadlines and re-evaluation; not a counterfactual relabelling of logged outcomes.",
+      "group": "R5_Controlled_robustness",
+      "filename": null
+    },
+    {
+      "id": "R5b",
+      "title": "Alarm burst intensity",
+      "plot_type": "controlled line",
+      "status": "pending",
+      "reason": "Requires controlled burst-traffic experiments at fixed device count and background load.",
+      "group": "R5_Controlled_robustness",
+      "filename": null
+    },
+    {
+      "id": "R5c",
+      "title": "Channel impairment",
+      "plot_type": "controlled line",
+      "status": "pending",
+      "reason": "Requires matched channel-impairment experiments.",
+      "group": "R5_Controlled_robustness",
+      "filename": null
+    },
+    {
+      "id": "R5d",
+      "title": "Mobility and handover exposure",
+      "plot_type": "controlled line",
+      "status": "pending",
+      "reason": "Requires independently controlled mobility experiments.",
+      "group": "R5_Controlled_robustness",
+      "filename": null
+    },
+    {
+      "id": "R6a",
+      "title": "Deadline mechanism ablation",
+      "plot_type": "grouped bars",
+      "status": "pending",
+      "reason": "Requires a specified new mechanism, retrained ablation policies and matched evaluation.",
+      "group": "R6_Mechanism_contribution",
+      "filename": null
+    },
+    {
+      "id": "R6b",
+      "title": "Mobility mechanism ablation",
+      "plot_type": "grouped bars",
+      "status": "pending",
+      "reason": "Requires a mobility mechanism and its controlled ablation; current model differences are not ablations.",
+      "group": "R6_Mechanism_contribution",
+      "filename": null
+    },
+    {
+      "id": "R6c",
+      "title": "Reliability under energy budgets",
+      "plot_type": "controlled line",
+      "status": "pending",
+      "reason": "Requires matched energy-budget operating points.",
+      "group": "R6_Mechanism_contribution",
+      "filename": null
+    },
+    {
+      "id": "R6d",
+      "title": "Decision overhead and budget",
+      "plot_type": "ECDF with budget reference",
+      "status": "pending",
+      "reason": "Inference time is not recorded; measure decision latency and define the deployment platform.",
+      "group": "R6_Mechanism_contribution",
+      "filename": null
+    }
+  ]
+}

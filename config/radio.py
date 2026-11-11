@@ -134,101 +134,6 @@ BAND_PROFILES = {
         "link_efficiency_ratio": 0.65,
         "default_tx_power_dbm": 23.0,
     },
-    # -- FR1 air-to-ground (UAV-BS <-> ground device) in open rural terrain. --
-    # 3GPP TR 36.777 aerial LoS path loss ~ 22*log10(d) (exponent 2.2); NLoS in
-    # light rural clutter/foliage taken as 2.5. Otherwise identical to FR1.
-    # Used by the satellite-IoT deployment's UAV-BS cells ("nr-fr1-a2g").
-    "FR1_A2G": {
-        "generation": "5G/6G aerial",
-        "carrier_frequency_hz": 3.5e9,
-        "bandwidth_hz": 20.0e6,
-        "path_loss_exponent_los": 2.2,
-        "path_loss_exponent_nlos": 2.5,
-        "reference_distance_m": 1.0,
-        "reference_loss_db": 30.0,
-        "noise_figure_db": 7.0,
-        "shadowing_std_db": 4.0,
-        "fading_model": "rician",
-        "beamforming_gain_dbi": 0.0,
-        "blockage_probability": 0.0,
-        "molecular_absorption_db_per_m": 0.0,
-        "rx_sensitivity_dbm": -100.0,
-        "link_efficiency_ratio": 0.75,
-        "default_tx_power_dbm": 23.0,
-    },
-    # -- LEO non-terrestrial bands (3GPP TR 38.821 Set-1 LEO-600, TR 38.811). --
-    # Satellite links are free-space LoS: exponent 2 for both LoS/NLoS. The
-    # anchor is raised from the terrestrial 30 dB to carry the exact 1 m/1 GHz
-    # FSPL (32.45 dB) plus the TR 38.811/38.821 fixed NTN losses (atmospheric
-    # ~0.1, scintillation 2.2, polarization 3.0, shadow-fading margin 3.0 dB),
-    # so the per-band frequency and distance terms are unchanged.
-    # beamforming_gain_dbi is the AGGREGATE terminal + satellite antenna gain.
-    #
-    # S-band IoT-NTN uplink (Rel-17 n256, ~2 GHz): one 180 kHz NB-IoT carrier,
-    # 23 dBm handheld/sensor terminal with ~0 dBi antenna, satellite G/T ~1.1 dB/K
-    # (~24 dBi). Gives SNR ~ +4 dB at zenith and ~ -3 dB at 25 deg elevation,
-    # i.e. tens to a few hundred kbit/s -- NB-IoT NTN class rates.
-    "NTN_S": {
-        "generation": "5G-NTN",
-        "carrier_frequency_hz": 2.0e9,
-        "bandwidth_hz": 180.0e3,
-        "path_loss_exponent_los": 2.0,
-        "path_loss_exponent_nlos": 2.0,
-        "reference_distance_m": 1.0,
-        "reference_loss_db": 40.7,
-        "noise_figure_db": 2.2,
-        "shadowing_std_db": 0.0,
-        "fading_model": "rician",
-        "beamforming_gain_dbi": 24.0,
-        "blockage_probability": 0.0,
-        "molecular_absorption_db_per_m": 0.0,
-        "rx_sensitivity_dbm": -130.0,
-        "link_efficiency_ratio": 0.75,
-        "default_tx_power_dbm": 23.0,
-    },
-    # Ka-band broadband uplink (~30 GHz) for a VSAT/flat-panel terminal (eMBB
-    # cameras). +3 dB rain/atmospheric margin over NTN_S. 100 MHz user-beam
-    # grant. The device radio model radiates a fixed 0.2 W, so the VSAT's ~2 W
-    # amplifier (+10 dB) is folded into the aggregate gain with the terminal
-    # (~36 dBi) and satellite (~39 dBi) antennas: 85 dBi total. SNR ~11 dB at
-    # zenith, ~6 dB at 25 deg -> roughly 170-290 Mbit/s per beam.
-    "NTN_KA": {
-        "generation": "5G-NTN",
-        "carrier_frequency_hz": 30.0e9,
-        "bandwidth_hz": 100.0e6,
-        "path_loss_exponent_los": 2.0,
-        "path_loss_exponent_nlos": 2.0,
-        "reference_distance_m": 1.0,
-        "reference_loss_db": 43.7,
-        "noise_figure_db": 2.0,
-        "shadowing_std_db": 0.0,
-        "fading_model": "rician",
-        "beamforming_gain_dbi": 85.0,
-        "blockage_probability": 0.0,
-        "molecular_absorption_db_per_m": 0.0,
-        "rx_sensitivity_dbm": -120.0,
-        "link_efficiency_ratio": 0.75,
-        "default_tx_power_dbm": 23.0,
-    },
-    # Ka-band feeder link satellite -> ground gateway (20 GHz, large gateway dish).
-    "NTN_FEEDER": {
-        "generation": "5G-NTN",
-        "carrier_frequency_hz": 20.0e9,
-        "bandwidth_hz": 250.0e6,
-        "path_loss_exponent_los": 2.0,
-        "path_loss_exponent_nlos": 2.0,
-        "reference_distance_m": 1.0,
-        "reference_loss_db": 43.7,
-        "noise_figure_db": 2.0,
-        "shadowing_std_db": 0.0,
-        "fading_model": "rician",
-        "beamforming_gain_dbi": 90.0,
-        "blockage_probability": 0.0,
-        "molecular_absorption_db_per_m": 0.0,
-        "rx_sensitivity_dbm": -120.0,
-        "link_efficiency_ratio": 0.75,
-        "default_tx_power_dbm": 40.0,
-    },
 }
 
 
@@ -374,19 +279,6 @@ _RAW_LINK_PROFILES = {
         technology="directional NR backhaul",
         spatial_streams=2,
     ),
-    # UAV-BS access over open rural terrain (satellite-IoT UAV zone).
-    "nr-fr1-a2g": _radio("nr-fr1-a2g", "FR1_A2G", "5G/6G aerial", 20.0e6, spatial_streams=2),
-    # LEO satellite access (device -> satellite) and feeder (satellite -> gateway).
-    # S-band: 4 NB-IoT carriers per LEO beam served in parallel (multi-carrier
-    # FDMA). spatial_streams is this model's parallel-channel capacity
-    # multiplier; its 0.6 derating (1 + 3*0.6 = 2.8x) stands in for carrier
-    # scheduling/control overhead. Per-carrier SNR is unchanged.
-    "ntn-s-access": _radio("ntn-s-access", "NTN_S", "5G-NTN", 1.0e6,
-                           technology="NB-IoT NTN (Rel-17), 4 carriers", spatial_streams=4),
-    "ntn-ka-access": _radio("ntn-ka-access", "NTN_KA", "5G-NTN", 300.0e6,
-                            technology="Ka-band VSAT", spatial_streams=1),
-    "ntn-feeder": _radio("ntn-feeder", "NTN_FEEDER", "5G-NTN", 1.0e9,
-                         technology="Ka-band feeder link", spatial_streams=2),
     "fibre-backhaul": _fibre("fibre-backhaul", 10.0e9),
     "fibre-core": _fibre("fibre-core", 100.0e9),
 }

@@ -1,0 +1,81 @@
+{
+  "evaluation_run": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation",
+  "evaluation_seeds": [
+    1
+  ],
+  "training_run": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training",
+  "training_seeds": [
+    1
+  ],
+  "created_utc": "2026-10-27T11:47:03.272890+00:00",
+  "models": [
+    "dqn",
+    "double_dqn",
+    "ppo",
+    "a2c",
+    "q_learning",
+    "random"
+  ],
+  "source_files": [
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\dqn\\results.csv",
+      "sha256": "868340f55282984e7ca7b6618f6ebd1cfa2037a5fdad5408850714c23bd16c3f",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\double_dqn\\results.csv",
+      "sha256": "36fd95cd29952777a93abf32fa66b933ccbf7d4906ef3b0eea18bd6d25bc9467",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\ppo\\results.csv",
+      "sha256": "1609faec30003ad4dbee51b050a8b7da446e286b04e34158a93ec1c02a2610a0",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\a2c\\results.csv",
+      "sha256": "afc05fc7d604bf300d306a118cce20953f48484b422cccd3d58c65235e308917",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\q_learning\\results.csv",
+      "sha256": "00c85beb7622cf17769e803405af52d77f855b4bbc57d0f0804868e023a8c250",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_002_fr3_urban_aiot_evaluation\\evaluation\\seed_1\\offloading\\random\\results.csv",
+      "sha256": "c16e8892b0edb44f8e6ba5b8e6f35443aa2a99cade01faf5abd04b4713ad1905",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training\\exploration\\seed_1\\offloading\\dqn\\results.csv",
+      "sha256": "a77899ec59d98894d240a465ccb13f14af22893b05b8b9bd2a572f69efede097",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training\\exploration\\seed_1\\offloading\\double_dqn\\results.csv",
+      "sha256": "97bee6e41a4c7bea19e0a6d3530bb7b93cc62bde9b3b3f5af7723a10fc64d928",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training\\exploration\\seed_1\\offloading\\ppo\\results.csv",
+      "sha256": "fde4e793a970486f54334df0c759d4643cbde11ae496c414a288f3f7e44533a5",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training\\exploration\\seed_1\\offloading\\a2c\\results.csv",
+      "sha256": "498a8f84fd144abaa07b6faadd909f5eb13d917666cab78333a2dc64a9cdbb24",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training\\exploration\\seed_1\\offloading\\q_learning\\results.csv",
+      "sha256": "10eef23725a0880e0ccc6252407d8072d6e9842b7f9b2fcb6b13ae06a8586ffa",
+      "rows": 20100
+    },
+    {
+      "path": "D:\\6G-UrbanNetSim\\6G-UrbanNetSim-1.1\\output\\run_001_fr3_urban_aiot_training\\exploration\\seed_1\\offloading\\random\\results.csv",
+      "sha256": "da5bceddd38834a09566642a2cdae3773d3bd1006c236683a15b5066660002d3",
+      "rows": 20100
+    }
+  ]
+}

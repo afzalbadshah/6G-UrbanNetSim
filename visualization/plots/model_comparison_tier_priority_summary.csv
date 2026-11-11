@@ -1,0 +1,8 @@
+model,priority_class,allocated_tier,count,percentage,model_label
+double_dqn,URLLC,CLOUD,1599,25.782005804579168,Double DQN
+double_dqn,URLLC,LOCAL_DEVICE,230,3.708481135117704,Double DQN
+double_dqn,URLLC,MEC,4373,70.50951306030314,Double DQN
+double_dqn,eMBB,CLOUD,8087,78.99003711662434,Double DQN
+double_dqn,eMBB,LOCAL_DEVICE,2,0.019535065442469232,Double DQN
+double_dqn,eMBB,MEC,2149,20.990427817933192,Double DQN
+double_dqn,mMTC,MEC,3660,100.0,Double DQN

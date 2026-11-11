@@ -37,14 +37,6 @@ _MOBILITY_CLASS_BY_KIND = {
     # "stationary" intentionally omitted: no mobility model is attached.
 }
 
-
-class _NullReporter:
-    def report(self, data):
-        return None
-
-    def close(self):
-        return None
-
 from collections import Counter, defaultdict
 
 import config as cfg
@@ -56,12 +48,6 @@ from config.topology import get_deployment_profile
 from core.deployment_builder  import build_deployed_topology
 from network                  import PhysicalTopology, Position3D
 from metrics.handover_channel  import calculate_interference_power_dbm
-from metrics.channel           import log_distance_path_loss_db
-from config import zones as zone_config
-from scheduler.common import common_config
-from scheduler.common.common_action import ACTION_SAT
-from config.radio import get_band
-from types import SimpleNamespace
 try:
     from config import DEVICE_TYPE_PROFILES
 except Exception:
@@ -216,80 +202,6 @@ def place_servers_in_city(servers):
 
 
 
-# ───────────────────── satellite-IoT zone helpers ─────────────────────
-
-def _choose_zone_for_spawn():
-    """Pick the spawn zone by ZONE_DEVICE_SHARE (cellular only if zones are off)."""
-    if not zone_config.ZONES_ENABLED:
-        return zone_config.DEFAULT_ZONE
-    shares = zone_config.ZONE_DEVICE_SHARE
-    names = [z for z in zone_config.ZONE_ORDER if float(shares.get(z, 0.0)) > 0.0]
-    return random.choices(names, weights=[float(shares[z]) for z in names], k=1)[0]
-
-
-def _choose_device_profile_for_zone(zone_id):
-    """City mix in the cellular zone; environmental mix in UAV/remote zones."""
-    weights = (zone_config.ZONE_DEVICE_WEIGHTS or {}).get(zone_id) if zone_config.ZONES_ENABLED else None
-    if not weights:
-        return _choose_device_profile()
-    names = [n for n in weights if n in DEVICE_TYPE_PROFILES and float(weights[n]) > 0.0]
-    name = random.choices(names, weights=[float(weights[n]) for n in names], k=1)[0]
-    return name, DEVICE_TYPE_PROFILES.get(name, {}) or {}
-
-
-def _random_point_in_zone(zone_id):
-    if not zone_config.ZONES_ENABLED:
-        return (random.uniform(CITY_AREA["xmin"], CITY_AREA["xmax"]),
-                random.uniform(CITY_AREA["ymin"], CITY_AREA["ymax"]))
-    x0, x1, y0, y1 = zone_config.ZONES[zone_id]["extent_m"]
-    return random.uniform(x0, x1), random.uniform(y0, y1)
-
-
-_UAV_PROBE_MODELS = {}
-
-
-def _uav_in_coverage(x, y, dev_z, uav):
-    """True when the device -> UAV-BS uplink closes in the packet channel model.
-
-    Read-only probe of the SAME SixGChannelModel the packet engine uses for the
-    access hop (3-D distance, elevation, device radio power), without
-    interference: covered <=> not in outage. Returns (covered, rx_dbm, dist_m).
-    """
-    from metrics.channel import SixGChannelModel
-    from network import ChannelRequest, Direction, instantiate_link_profile
-    from config.energy import POWER_PROFILES
-
-    profile_id = str(uav.profile_id)
-    model = _UAV_PROBE_MODELS.get(profile_id)
-    if model is None:
-        model = SixGChannelModel(instantiate_link_profile(profile_id, shared_resource_id=f"probe:{profile_id}"))
-        _UAV_PROBE_MODELS[profile_id] = model
-    uav_z = _entity_altitude_m(uav)
-    horizontal = math.hypot(x - uav.x, y - uav.y)
-    dist = math.hypot(horizontal, uav_z - dev_z)
-    result = model.evaluate(ChannelRequest(
-        link_profile_id=profile_id, hop_id="probe", requested_at_s=0.0,
-        distance_m=max(1.0, dist), on_wire_bytes=1500, direction=Direction.UPLINK,
-        tx_power_w=float(POWER_PROFILES["device_radio_default"]["radiated_tx_power_w"]),
-        elevation_angle_deg=math.degrees(math.atan2(abs(uav_z - dev_z), horizontal)),
-    ))
-    return (not result.outage), float(result.rx_power_dbm), dist
-
-
-def _satellite_rssi_dbm(slant_m, access_node_id, tx_power_dbm=23.0):
-    """Received satellite uplink power (dBm) with the NTN band's link budget."""
-    profile_id = {"LEO_SAT_S": "ntn-s-access", "LEO_SAT_KA": "ntn-ka-access"}[access_node_id]
-    band = get_band(str(get_link_profile(profile_id)["band"]))
-    loss = log_distance_path_loss_db(
-        distance_m=float(slant_m),
-        reference_distance_m=float(band["reference_distance_m"]),
-        reference_loss_db=float(band["reference_loss_db"]),
-        path_loss_exponent=float(band["path_loss_exponent_los"]),
-        carrier_frequency_hz=float(band["carrier_frequency_hz"]),
-    )
-    return tx_power_dbm + float(band["beamforming_gain_dbi"]) - loss
-
-
 class Simulator:
     """
     Orchestrates simulation rounds and integrates a scheduler.
@@ -327,19 +239,11 @@ class Simulator:
             deployed_topology.mapping,
         )
         self.access_points = list(deployed_topology.access_points)
-        self.deployment = deployment
         self.deployment_profile_id = deployment.profile_id
         self.access_generation = deployment.access_generation
         self.ground_access_band_name = str(
             get_link_profile(deployment.ground_bs_profile_id)["band"]
         )
-        # Satellite-IoT scenario: LEO layer present in the deployed topology.
-        self.satellite_enabled = bool(
-            getattr(deployment, "ntn_enabled", False)
-            and zone_config.SATELLITE_CONFIG.get("enabled", True)
-        )
-        self.sat_elevation_deg = zone_config.satellite_elevation_deg(0.0)
-        self.sat_slant_range_m = zone_config.slant_range_m(self.sat_elevation_deg)
         # Reachability map {source_node: set(destinations)} from the deployed
         # topology's declared routes, so the scheduler only offers compute tiers
         # the packet engine can actually route to from a device's radio
@@ -368,14 +272,11 @@ class Simulator:
         os.makedirs(self.offloading_dir, exist_ok=True)
         os.makedirs(self.mobility_dir, exist_ok=True)
         self.model_dir = self.offloading_dir  # back-compat alias -- offloading output, same as before
-        if bool(getattr(common_config, "WRITE_SERVER_RESULTS_CSV", False)):
-            self.task_reporter = Reporter(
-                TASK_FIELDS,
-                str(self.offloading_dir / "server_results.csv"),
-                print_console=bool(SIMULATION.get("print_metrics", False)),
-            )
-        else:
-            self.task_reporter = _NullReporter()
+        self.task_reporter = Reporter(
+            TASK_FIELDS,
+            str(self.offloading_dir / "server_results.csv"),
+            print_console=bool(SIMULATION.get("print_metrics", False)),
+        )
         if hasattr(self.scheduler, "set_output_dirs"):
             self.scheduler.set_output_dirs(self.offloading_dir, self.mobility_dir)
 
@@ -403,16 +304,13 @@ class Simulator:
             # *where* that device lands, not whether it gets chosen --
             # _choose_device_profile()'s weighted random.choices call (and
             # so the overall per-type device ratio) is untouched.
-            # Satellite-IoT zones: pick the spawn zone first, then a device
-            # type from that zone's mix (city mix in the cellular zone,
-            # environmental sensors/cameras/alerts in the UAV/remote zones).
-            spawn_zone = _choose_zone_for_spawn()
-            device_type, profile = _choose_device_profile_for_zone(spawn_zone)
+            device_type, profile = _choose_device_profile()
 
             if device_type in JUNCTION_ONLY_DEVICE_TYPES:
                 init_x, init_y = _random_junction_point()
             else:
-                init_x, init_y = _random_point_in_zone(spawn_zone)
+                init_x = random.uniform(CITY_AREA["xmin"], CITY_AREA["xmax"])
+                init_y = random.uniform(CITY_AREA["ymin"], CITY_AREA["ymax"])
             init_x, init_y = _clamp_city(init_x, init_y)
 
             ent = MobileEntity(
@@ -554,10 +452,6 @@ class Simulator:
                 continue
             count = int(spec.get("num_datacenters", 1))
             area = MOBILITY_CONFIG.get("area", CITY_AREA)
-            uav_zone = getattr(getattr(self, "deployment", None), "uav_zone", None)
-            if tier == "UAV_BS" and uav_zone and zone_config.ZONES_ENABLED:
-                # Satellite-IoT scenario: UAV-BS patrol only the UAV zone.
-                area = zone_config.zone_area(uav_zone)
             uav_cells = None
             if tier == "UAV_BS":
                 # Each UAV-BS patrols a loop around its own coverage cell --
@@ -683,18 +577,6 @@ class Simulator:
         x, y = device.get_position()
         source_position = Position3D(float(x), float(y), _entity_altitude_m(device))
         access_node_id = None if is_local else str(getattr(task, "wireless_ap", "") or "")
-        position_overrides = self._live_position_overrides()
-        saved_interference = None
-        if int(action) == ACTION_SAT:
-            # Device -> LEO satellite -> gateway -> Cloud. The satellite sits at
-            # the current pass slant range above the device (the map is tiny
-            # next to a 600 km orbit), so the radio distance IS the slant range.
-            access_node_id = str(getattr(task, "sat_access_node", "") or zone_config.satellite_access_node(getattr(task, "service_class", "")))
-            sat_pos = Position3D(float(x), float(y), float(self.sat_slant_range_m))
-            for sat_id in zone_config.SAT_NODE_IDS:
-                position_overrides[sat_id] = sat_pos
-            saved_interference = getattr(task, "interference_dbm", None)
-            task.interference_dbm = None   # dedicated NTN spectrum
         result = self.task_execution_runtime.execute(
             task,
             server,
@@ -704,11 +586,8 @@ class Simulator:
             utilization_after_ratio=utilization_after,
             source_position=source_position,
             access_node_id=access_node_id,
-            position_overrides=position_overrides,
+            position_overrides=self._live_position_overrides(),
         )
-        if int(action) == ACTION_SAT:
-            task.interference_dbm = saved_interference
-            task.offload_access_node = access_node_id
         self.realized_execution_by_task_id[str(task.id)] = result
         return result
 
@@ -729,11 +608,6 @@ class Simulator:
             sname  = str(getattr(srv, "name", ""))
             ent_id = getattr(task, "entity_id", -1)
 
-            if getattr(task, "offload_access_node", None):
-                # Satellite path (device -> LEO -> gateway -> Cloud): no
-                # terrestrial/UAV backhaul arrow; the map draws device -> satellite.
-                dev_ids_by_tier["Cloud"].add(ent_id)
-                continue
             if sname.startswith("Metro"):
                 tier = "Metro"
             elif sname.startswith("Cloud"):
@@ -870,16 +744,6 @@ class Simulator:
                 if str(getattr(s, "tier", "")).upper() in ("MEC", "UAV_BS")
                 and hasattr(s, "x") and hasattr(s, "y")
             ]
-            # Serving LEO satellite geometry for this round (pass elevation ->
-            # slant range). Drives the satellite hop's propagation delay and
-            # path loss through the normal packet/channel engine.
-            self.sat_elevation_deg = zone_config.satellite_elevation_deg(self.current_time)
-            self.sat_slant_range_m = zone_config.slant_range_m(self.sat_elevation_deg)
-            uav_servers_live = [
-                s for s in self.servers
-                if str(getattr(s, "tier", "")) == "UAV_BS"
-                and not bool(getattr(s, "recharging", False))
-            ]
 
             for idx, task in enumerate(self.tasks):
                 task.entity_id = idx
@@ -897,42 +761,12 @@ class Simulator:
                         self.servers + self.access_points,
                     )
 
-                # ---- Satellite-IoT zones: which radio access exists here? ----
-                # Outside the cellular zone there are no ground towers. The
-                # device attaches to a UAV-BS whose link budget closes (if the
-                # zone has UAV cells), otherwise to the LEO satellite. This is
-                # physical availability only; the offloading policy still
-                # learns which of the available actions to take.
-                zone_id = zone_config.zone_at(x, y)
-                sat_rssi_dbm = None
-                uav_rssi_dbm = None
-                dev_z_now = _entity_altitude_m(dev)
-                if zone_config.ZONES_ENABLED and not zone_config.zone_allows(zone_id, "MEC"):
-                    serving_bs = None
-                    if zone_config.zone_allows(zone_id, "UAV_BS"):
-                        covered = []
-                        for uav in uav_servers_live:
-                            ok, rssi, _d = _uav_in_coverage(x, y, dev_z_now, uav)
-                            if ok:
-                                covered.append((rssi, uav))
-                        if covered:
-                            uav_rssi_dbm, serving_bs = max(covered, key=lambda item: item[0])
-                    if serving_bs is None and self.satellite_enabled and zone_config.zone_allows(zone_id, "SAT"):
-                        sat_node = zone_config.satellite_access_node(getattr(dev, "service_class", ""))
-                        sat_rssi_dbm = _satellite_rssi_dbm(self.sat_slant_range_m, sat_node)
-                        serving_bs = SimpleNamespace(
-                            name="LEO_SAT", tier="LEO_SAT", x=float(x), y=float(y),
-                            z=float(self.sat_slant_range_m),
-                            profile_id={"LEO_SAT_S": "ntn-s-access", "LEO_SAT_KA": "ntn-ka-access"}[sat_node],
-                            is_access_only=True,
-                        )
-
                 if serving_bs is not None and hasattr(serving_bs, "x") and hasattr(serving_bs, "y"):
                     # A serving UAV_BS (or an airborne task-generating UAV)
                     # is not at ground level -- use the true 3D distance so
                     # its altitude isn't dropped from the link budget.
                     dev_z = _entity_altitude_m(dev)
-                    bs_is_airborne = str(getattr(serving_bs, "tier", "")).upper() in ("UAV_BS", "LEO_SAT")
+                    bs_is_airborne = str(getattr(serving_bs, "tier", "")).upper() == "UAV_BS"
                     if dev_z > 0.0 or bs_is_airborne:
                         bs_z = _entity_altitude_m(serving_bs)
                         dist_bs = math.dist((x, y, dev_z), (serving_bs.x, serving_bs.y, bs_z))
@@ -956,10 +790,6 @@ class Simulator:
                 # mobility/handover_scheduler.py::select_server). Fall back to
                 # the simple proxy only if that hasn't run yet (e.g. no MECs).
                 sig_db = getattr(dev, "chosen_rssi_dbm", None)
-                if sat_rssi_dbm is not None:
-                    sig_db = sat_rssi_dbm
-                elif uav_rssi_dbm is not None:
-                    sig_db = uav_rssi_dbm
                 if sig_db is None:
                     try:
                         sig_db = (
@@ -1028,10 +858,7 @@ class Simulator:
                 # compute it here from the co-channel cells so that realized
                 # SINR (not just SNR) drives the access-hop transmission delay.
                 dev_interference_dbm = getattr(dev, "interference_dbm", "")
-                if str(getattr(serving_bs, "tier", "")) == "LEO_SAT":
-                    # Dedicated NTN spectrum: no terrestrial co-channel cells.
-                    task.interference_dbm = ""
-                elif isinstance(dev_interference_dbm, (int, float)):
+                if isinstance(dev_interference_dbm, (int, float)):
                     task.interference_dbm = dev_interference_dbm
                 else:
                     task.interference_dbm = calculate_interference_power_dbm(
@@ -1062,26 +889,6 @@ class Simulator:
                 task.handover_chosen_mem_util = getattr(dev, "chosen_mem_util", "")
                 task.handover_oracle_cpu_util = getattr(dev, "oracle_cpu_util", "")
                 task.handover_oracle_mem_util = getattr(dev, "oracle_mem_util", "")
-
-                # Satellite-IoT context carried on the task (state + CSV).
-                task.zone_id = zone_id
-                task.zone_index = zone_config.zone_index(zone_id)
-                task.sat_elevation_deg = float(self.sat_elevation_deg)
-                task.sat_slant_range_m = float(self.sat_slant_range_m)
-                task.sat_access_node = zone_config.satellite_access_node(getattr(task, "service_class", ""))
-                task.sat_available = int(
-                    self.satellite_enabled and zone_config.zone_allows(zone_id, "SAT")
-                )
-                if zone_config.ZONES_ENABLED and not zone_config.zone_allows(zone_id, "MEC"):
-                    # Terrestrial handover / coverage-outage bookkeeping does not
-                    # apply where there is no terrestrial network: access here
-                    # is the UAV-BS or satellite chosen above.
-                    task.handover_delay_ms = 0.0
-                    task.handover_interruption_ms = 0.0
-                    task.coverage_outage_flag = 0
-                    task.coverage_outage_duration_ms = 0.0
-                    task.handover_executed = 0
-                    task.handover_failure_flag = 0
 
             # 4) Scheduler → assignments
             self.scheduler.mobility = self.mobility
@@ -1142,11 +949,6 @@ class Simulator:
             # device -> AP -> Cloud instead of a line straight to the cloud.
             def _visual_ap(task, server):
                 sname = str(getattr(server, "name", ""))
-                if getattr(task, "offload_access_node", None) and zone_config.ZONES_ENABLED:
-                    # Draw device -> satellite marker (above the remote zone).
-                    x0, x1, _y0, y1 = zone_config.ZONES["remote"]["extent_m"]
-                    return SimpleNamespace(name="LEO_SAT", tier="SAT", x=(x0 + x1) / 2.0,
-                                           y=y1 - 0.06 * (CITY_AREA["ymax"] - CITY_AREA["ymin"]))
                 if sname.startswith("Metro") or sname.startswith("Cloud"):
                     wp_name = str(getattr(task, "wireless_ap", "") or "")
                     return name_to_srv.get(wp_name, server)

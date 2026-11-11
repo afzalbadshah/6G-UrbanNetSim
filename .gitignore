@@ -1,5 +1,28 @@
+# Byte-compiled / caches
 __pycache__/
 *.py[cod]
-.venv/
-/output/
-/trained_model/
+*.pyo
+
+# Large generated / binary artifacts (kept on disk, not in git)
+output/
+trained_model/
+tmp/
+*.pt
+*.pth
+*.pkl
+
+# Diagnostic scratch outputs written by this bug-fix work
+diag_output/
+diag_trained_model/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Transient / machine-local
+*.tmp
+.claude/settings.local.json
+.claude/**/*.tmp
+
+# Backup of the corrupted .git created during repo recovery (2026-09-26)
+.git.broken-backup-*/

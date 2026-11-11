@@ -25,7 +25,7 @@ from scheduler.common import common_config
 from scheduler.common.comparison_runner import create_comparison_scheduler
 from scheduler.common.policy_utils import set_global_seed
 try:
-    from visualization.smartcities_plotter import write_model_comparison_summary
+    from visualization.supportive.comparison_reporting import write_model_comparison_summary
 except ModuleNotFoundError:
     # Optional post-run comparison summary; the module may be absent in trimmed
     # checkouts. Per-model results.csv is still written without it.
@@ -106,7 +106,7 @@ def _start_run_output():
         mode=mode,
     )
     RUNTIME["run_dir"] = str(run_dir)
-    common_config.OUTPUT_DIR = str(run_dir)
+    common_config.OUTPUT_DIR = str(run_dir / _runtime("output_phase"))
     print(f"[RUN HISTORY] {run_dir.name} -> {run_dir}")
     return RUNTIME["run_dir"]
 
@@ -119,12 +119,7 @@ def _phase_output_dir(output_phase=None):
         root_phase = "evaluation" if not _runtime("train") else "exploration"
         phase = root_phase
     run_root = RUNTIME.get("run_dir") or _runtime("output_root")
-    # Flat layout: the versioned run folder IS the phase root, so the leading
-    # "exploration"/"evaluation" token is not repeated as a sub-folder.
-    rest = [part for part in phase.split("/")[1:] if part]
-    if not RUNTIME.get("run_dir"):
-        return os.path.join(run_root, root_phase, *rest)
-    return os.path.join(run_root, *rest)
+    return os.path.join(run_root, *phase.split("/"))
 
 
 def _summary_root():
@@ -235,13 +230,8 @@ def _run_ordered_models(ordered_models, allow_gui):
 #  MULTI-SEED CAMPAIGN (Task 57) - headless, per-seed folders
 # ==========================================================
 
-def _seed_dir(phase_dir, seed_index, flat=False):
-    """Per-seed output root: <run>/seed_<k> (1-based, readable).
-
-    ``flat=True`` (single-seed training) writes straight into the run folder.
-    """
-    if flat:
-        return phase_dir
+def _seed_dir(phase_dir, seed_index):
+    """Per-seed output root: output/<phase>/seed_<k> (1-based, readable)."""
     return os.path.join(phase_dir, f"seed_{seed_index + 1}")
 
 
@@ -260,6 +250,11 @@ def _multiseed_progress_callback(job):
             return
         round_id = int(payload.get("round_id", 0) or 0)
         total_rounds = int(payload.get("total_rounds", cfg.total_rounds()) or cfg.total_rounds())
+        from applications.staged_campaign import write_json
+        write_json(os.path.join(job["output_dir"], "current_job.json"), {
+            "model":job["model_name"], "training":job["train"], "seed":job["seed"],
+            "round":round_id, "total_rounds":total_rounds,
+            "updated_utc":datetime.now(timezone.utc).isoformat()})
         # Feed the GUI every round (smooth bar); print to console at ~10% steps.
         if queue is not None:
             try:
@@ -285,6 +280,12 @@ def _run_one_job(job):
     small picklable summary. No GUI, no shared state between jobs.
     """
     train = bool(job["train"])
+    import torch
+    torch.set_num_threads(1)
+    from pathlib import Path
+    from applications.staged_campaign import prepare_job, finish_job
+    from metrics.reward import hrllc_latency_ablation
+    checkpoint_root, mobility_root = prepare_job(job)
     cfg.apply_workload_profile(train_mode=train)      # §1 overrides read from config
     common_config.COMPARISON_ENABLED = True
     common_config.RUN_MODELS = list(cfg.RUN_MODELS)
@@ -295,8 +296,15 @@ def _run_one_job(job):
     scheduler = create_comparison_scheduler(
         job["model_name"], config=common_config, output_dir=job["output_dir"],
         train_mode=train, seed=int(job["seed"]), logger=print,
+        checkpoint_root=checkpoint_root, strict_load=True,
     )
     sim = Simulator(scheduler=scheduler, output_dir=job["output_dir"], workload=cfg.WORKLOAD)
+    handover = sim.mobility.handover_scheduler
+    handover.model_dir = str(mobility_root)
+    mobility_root.mkdir(parents=True, exist_ok=True)
+    if not train:
+        handover.load(strict=True)
+    assert not any(n.kind.value == "ntn" for n in sim.physical_topology.nodes)
     print(f"[JOB] seed={job['seed']} ({job['seed_index'] + 1}/{job['seed_total']}) "
           f"model={job['model_name']} -> {job['output_dir']}")
 
@@ -312,10 +320,17 @@ def _run_one_job(job):
             if rid and rid % CHECKPOINT_EVERY_ROUNDS == 0:
                 try:
                     scheduler.save_logs(include_plots=False)
+                    scheduler.save()
+                    handover.save()
                 except Exception:
                     pass
 
-    sim.run(train_mode=train, progress_callback=_callback)
+    ablation_token = hrllc_latency_ablation.set(cfg.ABLATE_HRLLC_LATENCY_SHAPING)
+    try:
+        sim.run(train_mode=train, progress_callback=_callback)
+    finally:
+        hrllc_latency_ablation.reset(ablation_token)
+    finish_job(job, sim, checkpoint_root, mobility_root)
     queue = job.get("progress_queue")
     if queue is not None:
         try:
@@ -330,12 +345,9 @@ def _run_one_job(job):
 def _build_jobs(run_models, seeds, train, phase_dir):
     # Workers re-read run settings from config.py §1 (spawn re-imports config),
     # so a job only carries what is unique to it: which model, which seed, where.
-    # Training is single-seed and flat (files directly in the run folder);
-    # evaluation keeps one seed_<k> folder per seed.
-    flat = bool(train) and len(seeds) == 1
     jobs = []
     for seed_index, seed in enumerate(seeds):
-        out_dir = _seed_dir(phase_dir, seed_index, flat=flat)
+        out_dir = _seed_dir(phase_dir, seed_index)
         for model_name in run_models:
             jobs.append({
                 "model_name": model_name,
@@ -344,6 +356,7 @@ def _build_jobs(run_models, seeds, train, phase_dir):
                 "seed_total": len(seeds),
                 "train": bool(train),
                 "output_dir": out_dir,
+                "training_run": getattr(cfg, "EVALUATION_TRAINING_RUN", None),
             })
     return jobs
 
@@ -360,6 +373,11 @@ def _write_manifest(phase_dir, run_models, seeds, train, plan):
         "repetitions": len(seeds),
         "models": list(run_models),
         "mode": "train" if train else "eval",
+        "deployment_profile": cfg.SIMULATION["deployment_profile"],
+        "state_dim": int(common_config.STATE_DIM),
+        "action_dim": int(common_config.ACTION_DIM),
+        "satellites": False,
+        "evaluation_training_run": getattr(cfg,"EVALUATION_TRAINING_RUN",None),
         "aggregate_metric": plan["aggregate_metric"],
         "confidence_interval_method": plan["confidence_interval_method"],
         "confidence_level": float(plan["confidence_level"]),
@@ -447,7 +465,7 @@ def _run_jobs_parallel_gui(jobs, max_workers, on_job_complete=None):
         )
         return
 
-    pool = _process_pool(max_workers)
+    pool = cf.ProcessPoolExecutor(max_workers=max_workers)
     futures = [pool.submit(_run_one_job, job) for job in jobs]
     handled_futures = set()
 
@@ -479,19 +497,9 @@ def _run_jobs_parallel_gui(jobs, max_workers, on_job_complete=None):
     gui.root.mainloop()
 
 
-def _process_pool(max_workers):
-    """Process pool that recycles each worker after one job (Python >= 3.11),
-    so a finished model's packet ledgers never accumulate in memory."""
-    import concurrent.futures as cf
-    try:
-        return cf.ProcessPoolExecutor(max_workers=max_workers, max_tasks_per_child=1)
-    except TypeError:
-        return cf.ProcessPoolExecutor(max_workers=max_workers)
-
-
 def _run_jobs_parallel_headless(jobs, max_workers, on_job_complete=None):
     import concurrent.futures as cf
-    with _process_pool(max_workers) as pool:
+    with cf.ProcessPoolExecutor(max_workers=max_workers) as pool:
         futures = [pool.submit(_run_one_job, job) for job in jobs]
         for fut in cf.as_completed(futures):
             res = fut.result()
@@ -508,14 +516,7 @@ def _run_multiseed_campaign(run_models):
     train = _runtime("train")
     plan = get_evaluation_plan(cfg.EVAL_PLAN_NAME)
     purpose = "train" if train else "eval"
-    # Training uses TRAINING_SEED_COUNT; evaluation uses MULTISEED_COUNT.
-    # Multi-seed campaigns write one seed_<k> folder per seed under one run.
-    seed_count = (
-        int(getattr(cfg, "TRAINING_SEED_COUNT", 1) or 1)
-        if train
-        else int(cfg.MULTISEED_COUNT)
-    )
-    seeds = resolved_seeds(plan, purpose=purpose, count=seed_count,
+    seeds = resolved_seeds(plan, purpose=purpose, count=int(getattr(cfg, "TRAINING_SEED_COUNT", cfg.MULTISEED_COUNT) if train else cfg.MULTISEED_COUNT),
                            master_seed=int(cfg.RANDOM_SEED))
     phase_dir = _phase_output_dir()
     os.makedirs(phase_dir, exist_ok=True)
@@ -552,10 +553,16 @@ def _run_multiseed_campaign(run_models):
                 on_job_complete=on_complete,
             )
     else:
+        # A fresh process for each model releases replay buffers between jobs.
+        import concurrent.futures as cf
+        completed = []
         for job in jobs:
-            res = _run_one_job(job)
+            with cf.ProcessPoolExecutor(max_workers=1) as pool:
+                res = pool.submit(_run_one_job, job).result()
             print(f"[DONE] seed={res['seed']} model={res['model']}")
-            if on_complete is not None:
+            completed.append(res)
+        if on_complete is not None:
+            for res in completed:
                 on_complete(res)
 
     # Per-seed comparison summaries; across-seed aggregation is tools/aggregate_seeds.py.
@@ -572,6 +579,10 @@ def _run_multiseed_campaign(run_models):
 
 
 def run_configured_models():
+    if cfg.ABLATE_HRLLC_LATENCY_SHAPING and (
+        not cfg.COMPARISON_ENABLED or not cfg.MULTISEED or cfg.RUN_MODELS != ["double_dqn"]
+    ):
+        raise ValueError('HRLLC latency ablation requires a DDQN-only multiseed comparison run.')
     _refresh_runtime_flags()
     _start_run_output()
     print(
@@ -617,7 +628,8 @@ def run_configured_models():
 
 def main():
     try:
-        run_while_system_awake(run_configured_models, logger=print)
+        from applications.staged_campaign import run_staged_campaign
+        run_while_system_awake(run_staged_campaign, logger=print)
     except Exception as exc:
         print(f"[ERROR] Scheduler run failed: {exc}")
         traceback.print_exc()

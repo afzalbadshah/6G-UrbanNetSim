@@ -290,16 +290,6 @@ class BuildingRenderer:
                     btype = rng.choice(self.TYPES)
                     size = rng.choice(self.SIZE_BUCKETS)
                     buildings.append({"x": bx, "y": by, "type": btype, "size": size})
-        # Satellite-IoT zones: skyline only in the cellular (city) zone; the
-        # UAV and remote zones get vegetation instead of buildings.
-        try:
-            from config import zones as zone_config
-            if zone_config.ZONES_ENABLED:
-                for b in buildings:
-                    if zone_config.zone_at(b["x"], b["y"]) != "cellular":
-                        b["type"], b["size"] = "sprout", 48
-        except Exception:
-            pass
         return buildings
 
     def draw(self):

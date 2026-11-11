@@ -78,11 +78,10 @@ def create_run(
         "mode": str(mode),
         "phase": "exploration" if str(mode).lower() == "training" else "evaluation",
     }
-    # Flat layout: the run folder itself is the phase root
-    #   training   -> run_<n>_<profile>_training/{offloading,mobility,plots}/...
-    #   evaluation -> run_<n>_<profile>_evaluation/seed_<k>/{offloading,mobility}/...
-    # (no extra exploration/ or evaluation/ sub-folder). The manifest records
-    # the phase so visualizations can still resolve it.
+    # Create the phase immediately so a visualization started during a long
+    # campaign can identify the latest compatible run before the first CSV is
+    # flushed. The simulator keeps ownership of all deeper seed/model folders.
+    (run_dir / manifest["phase"]).mkdir()
     (run_dir / "run_manifest.json").write_text(
         json.dumps(manifest, indent=2),
         encoding="utf-8",
@@ -106,38 +105,15 @@ def select_run(
     return candidate
 
 
-def _run_phase(run_dir: Path) -> str | None:
-    """Phase recorded in a run's manifest (flat layout), else None."""
-    try:
-        manifest = json.loads((Path(run_dir) / "run_manifest.json").read_text(encoding="utf-8"))
-        return str(manifest.get("phase") or "") or None
-    except (OSError, ValueError):
-        return None
-
-
 def select_phase(
     output_root: str | Path,
     phase: str,
     selected_run: str | Path | None = None,
 ) -> Path:
-    """Resolve the highest run containing ``phase``, unless explicitly pinned.
-
-    Flat runs (no phase sub-folder) are matched through their manifest and the
-    run folder itself is returned as the phase root.
-    """
+    """Resolve the highest run containing ``phase``, unless explicitly pinned."""
 
     root = Path(output_root)
     phase_name = str(phase)
-    if selected_run is not None and str(selected_run).strip():
-        run_dir = select_run(root, selected_run)
-        if not (run_dir / phase_name).is_dir() and _run_phase(run_dir) == phase_name:
-            return run_dir
-    else:
-        for run_dir in reversed(discover_runs(root)):
-            if (run_dir / phase_name).is_dir():
-                return run_dir / phase_name
-            if _run_phase(run_dir) == phase_name:
-                return run_dir
     if selected_run is not None and str(selected_run).strip():
         phase_dir = select_run(root, selected_run) / phase_name
         if not phase_dir.is_dir():

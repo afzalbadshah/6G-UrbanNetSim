@@ -7,8 +7,9 @@ matrix from :mod:`config.reward`, and returns an auditable component breakdown.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass
-from math import isfinite, log1p
+from math import isfinite
 
 import numpy as np
 
@@ -22,6 +23,9 @@ from config.reward import (
     REWARD_SCALE,
 )
 from config.scheduling import COMPUTE_SPILLOVER_THRESHOLD_PERCENT
+
+
+hrllc_latency_ablation = ContextVar("hrllc_latency_ablation", default=False)
 
 
 def _finite(name: str, value: float) -> float:
@@ -97,15 +101,13 @@ class RewardObservation:
     communication_energy_j: float = 0.0
     device_propulsion_energy_j: float = 0.0
     server_hover_energy_j: float = 0.0
-    # Preference scale for the positive, monotonic delay score. Actual task
-    # deadlines remain a separate service-success boundary in every zone.
+    # Preference scale for delay learning. Deadlines remain the separate hard
+    # safety boundary; this target lets small URLLC delay differences matter.
     delay_target_ms: float | None = None
     # Utilization of the action chosen by the policy.  It can differ from the
     # executed tier when the runtime protects a saturated tier by spilling the
     # task outward.  None means no spillover-aware caller supplied it.
     selected_projected_utilization_percent: float | None = None
-    # Legacy input retained for compatibility; it no longer exempts failures.
-    deadline_penalty_exempt: bool = False
 
     def __post_init__(self) -> None:
         if int(self.priority) not in PRIORITY_PROFILES:
@@ -156,7 +158,6 @@ class RewardBreakdown:
     compute_score: float
     shared_capacity_externality_pen: float
     overutilization_pen: float
-    overutilization_deduction_points: float
     invalid_pen: float
     execution_failed: bool
     mobility_pen: float
@@ -212,7 +213,7 @@ def evaluate_reward(observation: RewardObservation) -> RewardBreakdown:
 
     deadline_pen = float(np.clip(delay_ms / deadline_ms, 0.0, 4.0))
     delay_ratio = delay_ms / delay_target_ms
-    delay_score = 1.0 / (1.0 + delay_ratio)
+    delay_score = float(np.clip((2.0 / (1.0 + delay_ratio)) - 1.0, -1.0, 1.0))
     current_util = float(np.clip(observation.current_utilization_percent, 0.0, 100.0))
     future_util = float(np.clip(observation.projected_utilization_percent, 0.0, 100.0))
     util_reward = _unit(1.0 - (future_util / 100.0))
@@ -240,10 +241,8 @@ def evaluate_reward(observation: RewardObservation) -> RewardBreakdown:
     device_energy_pen = float(
         np.clip(observation.device_battery_energy_j / battery_norm, 0.0, 3.0)
     )
-    # Optimize incremental task energy, not the device's battery history.
-    # Log scaling retains discrimination across radio and compute magnitudes.
-    device_battery_score = 1.0 / (
-        1.0 + log1p(observation.device_battery_energy_j / battery_norm)
+    device_battery_score = float(
+        np.clip(battery_ratio - (device_energy_pen / 3.0), -1.0, 1.0)
     )
     server_battery_score = float(
         np.clip(observation.projected_server_battery_ratio, -1.0, 1.0)
@@ -256,11 +255,13 @@ def evaluate_reward(observation: RewardObservation) -> RewardBreakdown:
         if observation.shared_capacity
         else 0.0
     )
-    selected_future_util = float(
+    selected_future_util = float(np.clip(
         future_util
         if observation.selected_projected_utilization_percent is None
-        else observation.selected_projected_utilization_percent
-    )
+        else observation.selected_projected_utilization_percent,
+        0.0,
+        100.0,
+    ))
     overutilization_pen = overutilization_pressure(selected_future_util)
     mobility_pen = 1.0 if observation.mobility_violation else 0.0
     invalid_pen = INVALID_ACTION_PENALTY if observation.invalid_action else 0.0
@@ -285,8 +286,12 @@ def evaluate_reward(observation: RewardObservation) -> RewardBreakdown:
             externality_weight,
         )
     )
+    # DDQN ablation study: remove HRLLC latency shaping while keeping the original normalization.
+    delay_contribution = delay_weight * delay_score
+    if int(observation.priority) == 1 and hrllc_latency_ablation.get():
+        delay_contribution = 0.0
     objective = (
-        delay_weight * delay_score
+        delay_contribution
         + device_battery_weight * device_battery_score
         + server_battery_weight * server_battery_score
         + compute_weight * compute_score
@@ -296,10 +301,9 @@ def evaluate_reward(observation: RewardObservation) -> RewardBreakdown:
     ) / max(weight_sum, 1e-9)
     # Preserve the established reward scale exactly at/below the threshold;
     # only excess utilization changes the objective.
-    overutilization_deduction_points = (
-        REWARD_SCALE * overutilization_weight * overutilization_pen
+    objective -= (
+        overutilization_weight * overutilization_pen / max(weight_sum, 1e-9)
     )
-    objective -= overutilization_deduction_points / REWARD_SCALE
     objective = float(np.clip(objective, -1.0, 1.0))
 
     raw_reward = REWARD_SCALE * objective - invalid_pen
@@ -324,7 +328,6 @@ def evaluate_reward(observation: RewardObservation) -> RewardBreakdown:
         compute_score=compute_score,
         shared_capacity_externality_pen=shared_capacity_pen,
         overutilization_pen=overutilization_pen,
-        overutilization_deduction_points=overutilization_deduction_points,
         invalid_pen=float(invalid_pen),
         execution_failed=bool(observation.execution_failed),
         mobility_pen=mobility_pen,

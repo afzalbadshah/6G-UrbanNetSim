@@ -84,6 +84,8 @@ class PPOPolicy(A2CPolicy):
             self.optimizer.step()
             self._updates_applied += 1
             last_loss = float(loss.item())
+        if self.epsilon_granularity != "round":
+            self.epsilon = self.epsilon_scheduler.step()
         return last_loss
 
     def save(self, path):

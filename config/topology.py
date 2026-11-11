@@ -43,8 +43,7 @@ NODE_KINDS = (
     "metro",
     "cloud_gateway",  # routed endpoint (wired), NOT a radio tower
     "uav_bs",
-    "ntn",            # LEO satellite access node (see config/zones.py)
-    "sat_gateway",    # satellite ground gateway (teleport) -> fibre to Cloud
+    "ntn",            # satellite/HAPS (deferred; schema room only)
 )
 
 def _node(node_id, node_kind, x_m, y_m, z_m, profile_id, prov):
@@ -226,12 +225,6 @@ class DeploymentProfile:
     anchor_profile_id: str = "nr-lowband-access"
     hotspot_count: int = 0
     hotspot_profile_id: str | None = None
-    # Satellite-IoT scenario (config/zones.py). When set, ground BS/MEC are
-    # placed only inside ``access_zone``, UAV-BS cells only inside ``uav_zone``,
-    # and ``ntn_enabled`` adds the LEO satellite + gateway layer.
-    access_zone: str | None = None
-    uav_zone: str | None = None
-    ntn_enabled: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.profile_id, str) or not self.profile_id.strip():
@@ -314,6 +307,13 @@ DEPLOYMENT_PROFILES: Mapping[str, DeploymentProfile] = MappingProxyType(
         # Mirrors "fr1_city_coverage" at the same 81-site density, but on a real
         # 6G FR3 access profile, so the two can be run back-to-back for a direct
         # 5G-vs-6G comparison at equal site density.
+        "fr3_urban_aiot": DeploymentProfile(
+            profile_id="fr3_urban_aiot",
+            ground_bs_count=81,
+            ground_bs_profile_id="nr-fr3-access",
+            uav_profile_id="nr-fr1-air",
+            access_generation="6G",
+        ),
         "fr3_city_coverage_6g": DeploymentProfile(
             profile_id="fr3_city_coverage_6g",
             ground_bs_count=81,
@@ -365,19 +365,6 @@ DEPLOYMENT_PROFILES: Mapping[str, DeploymentProfile] = MappingProxyType(
             access_generation="6G",
             hotspot_count=12,
             hotspot_profile_id="nr-subthz-access",
-        ),
-        # Satellite-enabled IoT scenario: the same FR3/6G macro density as
-        # "fr3_city_coverage_6g" (81 sites / 100 km^2 -> ~32 sites on the 40 km^2
-        # cellular zone), UAV-BS cells over the UAV zone, LEO satellite overhead.
-        "zoned_satellite_6g": DeploymentProfile(
-            profile_id="zoned_satellite_6g",
-            ground_bs_count=32,
-            ground_bs_profile_id="nr-fr3-access",
-            uav_profile_id="nr-fr1-a2g",
-            access_generation="6G",
-            access_zone="cellular",
-            uav_zone="uav",
-            ntn_enabled=True,
         ),
     }
 )

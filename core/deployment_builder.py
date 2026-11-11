@@ -29,7 +29,6 @@ from math import hypot
 from typing import Mapping
 
 from config.topology import DeploymentProfile
-from config import zones as zone_config
 from entities.access_point import AccessPoint
 from mobility.road_network import distribute_coverage_positions, farthest_first_order
 from network import PhysicalTopology, Position3D
@@ -315,70 +314,6 @@ def _regenerate_uav_sites(
             )
 
 
-def _add_ntn_layer(raw: dict) -> None:
-    """Add the LEO satellite access nodes, ground gateway and routes to Cloud.
-
-    Transparent (bent-pipe) payload: device -> satellite (radio access, added at
-    runtime) -> gateway (Ka feeder, radio) -> Cloud (fibre). One satellite node
-    per terminal type (S-band IoT-NTN, Ka-band broadband) so each has its own
-    shared radio resource/queue. The satellite's live position (slant range from
-    the pass elevation) is supplied at runtime as a position override; the
-    nominal position here is the zenith point above the map centre.
-    """
-
-    sat_cfg = zone_config.SATELLITE_CONFIG
-    nodes = _node_map(raw)
-    cloud_ids = [
-        node_id for node_id, item in nodes.items()
-        if str(item.get("node_kind", "")).lower() == "cloud_gateway"
-    ]
-    if not cloud_ids:
-        raise ValueError("the satellite layer needs a Cloud gateway node to route to")
-    cloud_id = cloud_ids[0]
-    extent = raw["coordinate_frame"]["extent_m"]
-    cx = (float(extent["x_min"]) + float(extent["x_max"])) / 2.0
-    cy = (float(extent["y_min"]) + float(extent["y_max"])) / 2.0
-    altitude = float(sat_cfg["altitude_m"])
-    prov = _provenance(raw, "fibre-core")
-    gw_x, gw_y = (float(v) for v in sat_cfg["gateway_xy_m"])
-    gw_z = float(sat_cfg["gateway_height_m"])
-    gw_id = zone_config.SAT_GATEWAY_ID
-    raw["nodes"].append({
-        "node_id": gw_id, "node_kind": "sat_gateway",
-        "x_m": gw_x, "y_m": gw_y, "z_m": gw_z,
-        "profile_id": "ntn-feeder", "provenance": prov,
-    })
-    access_profile = {"LEO_SAT_S": "ntn-s-access", "LEO_SAT_KA": "ntn-ka-access"}
-    for sat_id in zone_config.SAT_NODE_IDS:
-        # One gateway->Cloud transport channel per satellite carrier (separate
-        # modem chain / VLAN), so the FIFO packet engine never makes a fast Ka
-        # flow wait behind slow S-band IoT packets on the same reservation queue.
-        gw_cloud_link = f"{gw_id}->{cloud_id}::{sat_id}"
-        raw["links"].append({
-            "link_id": gw_cloud_link, "source_node_id": gw_id, "destination_node_id": cloud_id,
-            "link_profile_id": "fibre-core",
-            "route_distance_m": float(sat_cfg["gateway_cloud_fibre_m"]),
-            "medium": "wired", "provenance": prov,
-        })
-        raw["nodes"].append({
-            "node_id": sat_id, "node_kind": "ntn",
-            "x_m": cx, "y_m": cy, "z_m": altitude,
-            "profile_id": access_profile[sat_id], "provenance": prov,
-        })
-        feeder_id = f"{sat_id}->{gw_id}"
-        raw["links"].append({
-            "link_id": feeder_id, "source_node_id": sat_id, "destination_node_id": gw_id,
-            "link_profile_id": "ntn-feeder",
-            "route_distance_m": Position3D(cx, cy, altitude).distance_to(Position3D(gw_x, gw_y, gw_z)),
-            "medium": "radio", "provenance": prov,
-        })
-        raw["routes"].append({
-            "route_id": f"r_{sat_id.lower()}_{cloud_id.lower()}",
-            "source_node_id": sat_id, "destination_node_id": cloud_id,
-            "hop_ids": [feeder_id, gw_cloud_link], "provenance": prov,
-        })
-
-
 @dataclass(frozen=True, slots=True)
 class DeploymentTopology:
     """Derived topology and runtime access-point objects for one profile."""
@@ -425,20 +360,8 @@ def build_deployed_topology(
         raise ValueError("base topology mapping must contain nodes and links")
 
     area = _area_from_extent(raw["coordinate_frame"]["extent_m"])
-    # Zoned scenario: ground access (and MEC) only inside the cellular zone,
-    # UAV-BS cells only inside the UAV zone. Without zones both use the city.
-    access_area = (
-        zone_config.zone_area(deployment.access_zone)
-        if deployment.access_zone and zone_config.ZONES_ENABLED
-        else area
-    )
-    uav_area = (
-        zone_config.zone_area(deployment.uav_zone)
-        if deployment.uav_zone and zone_config.ZONES_ENABLED
-        else area
-    )
     ground_bs_positions = (
-        distribute_coverage_positions(deployment.ground_bs_count, access_area)
+        distribute_coverage_positions(deployment.ground_bs_count, area)
         if deployment.ground_bs_count > 0
         else []
     )
@@ -458,7 +381,7 @@ def build_deployed_topology(
         else:
             # No ground-BS layer requested: nothing to promote from, so MEC
             # keeps its own independent coverage-optimizing placement.
-            mec_positions = distribute_coverage_positions(mec_count, access_area)
+            mec_positions = distribute_coverage_positions(mec_count, area)
         _regenerate_mec_sites(
             raw,
             mec_positions,
@@ -468,10 +391,8 @@ def build_deployed_topology(
         )
     if "UAV_BS" in counts:
         _regenerate_uav_sites(
-            raw, int(counts["UAV_BS"]), uav_area, deployment.uav_profile_id, deployment.anchor_profile_id
+            raw, int(counts["UAV_BS"]), area, deployment.uav_profile_id, deployment.anchor_profile_id
         )
-    if deployment.ntn_enabled:
-        _add_ntn_layer(raw)
 
     if deployment.ground_bs_count == 0 and deployment.hotspot_count == 0:
         return DeploymentTopology(base_profile_id, raw, ())
@@ -606,7 +527,7 @@ def build_deployed_topology(
         # coverage-spreading placement as the main grid, just at a much
         # smaller count, and identically wired to MEC/Metro/Cloud/UAV via
         # the same helper. "HOTSPOT_" keeps ids distinct from "BS_*".
-        hotspot_positions = distribute_coverage_positions(deployment.hotspot_count, access_area)
+        hotspot_positions = distribute_coverage_positions(deployment.hotspot_count, area)
         for index, (x_m, y_m) in enumerate(hotspot_positions):
             _place_access_site(
                 f"HOTSPOT_{index + 1}", index, x_m, y_m, deployment.hotspot_profile_id

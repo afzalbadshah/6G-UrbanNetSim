@@ -8,10 +8,11 @@ own -- change a run here, not in the launcher.
 
 # --- What to run ---------------------------------------------------------
 RANDOM_SEED = 42                 # master seed (single authority for every run)
-RUN_TRAINING = False              # fresh FR3/6G training run
+RUN_TRAINING = True              # fresh FR3/6G training run
 RUN_MODELS = ["random", "q_learning", "dqn", "double_dqn", "ppo", "a2c"] #["random", "q_learning", "dqn", "double_dqn", "ppo", "a2c"] 
 COMPARISON_ENABLED = True        # run all RUN_MODELS (False = only MAIN_SCHEDULER)
 MAIN_SCHEDULER = "dqn"           # used only when COMPARISON_ENABLED is False
+ABLATE_HRLLC_LATENCY_SHAPING = False  # Ablation study: enable only for a DDQN-only multiseed run.
 
 # --- Run size ------------------------------------------------------------
 # Pick a density profile (defined in config/workload.py WORKLOAD_PROFILES):
@@ -25,18 +26,21 @@ WORKLOAD_OVERRIDES = {}          # extra workload overrides, e.g. {"increment": 
 # --- Output & GUI --------------------------------------------------------
 # Stable history root. Each application launch creates the next recognizable
 # folder inside it, for example:
-#   output/run_001_fr3_city_coverage_6g_training/...
-#   output/run_002_fr3_city_coverage_6g_evaluation/seed_1/...
-#   output/run_002_fr3_city_coverage_6g_evaluation/seed_2/...
+#   output/run_001_fr3_city_coverage_6g_training/exploration/...
+#   output/run_002_fr3_city_coverage_6g_evaluation/evaluation/...
 OUTPUT_DIR = "output"
-TRAINING_GUI = True
-EVALUATION_GUI = True
+TRAINING_GUI = False
+EVALUATION_GUI = False
 ACTIVE_DEVICES_ONLY = True       # update mobility only for round-active devices
 
 # --- Multi-seed campaign -------------------------------------------------
 MULTISEED = True                 # False = single-seed run (uses RANDOM_SEED)
-TRAINING_SEED_COUNT = 3          # training seeds, each written as seed_<n> when count > 1
-MULTISEED_COUNT = 3              # evaluation seeds written under one run as seed_1..seed_3
+MULTISEED_COUNT = 1             # stop the campaign after the first seed run
 MULTISEED_PARALLEL = False        # run (seed, model) jobs in parallel (safe on local disk)
 MULTISEED_MAX_WORKERS = None     # None -> min(cpu_count, number of jobs)
 EVAL_PLAN_NAME = "default"       # EvaluationPlan providing methodology metadata
+
+# Staged AIoT campaign: train once, then evaluate seed 1 only.
+TRAINING_SEED_COUNT = 1
+AUTO_EVALUATE_FIRST_SEED = True
+EVALUATION_TRAINING_RUN = None

@@ -1,9 +1,9 @@
 """Physical scheduler availability and battery-operating settings.
 
 Learned service-class preferences belong only to the reward specification.
-The learned runner attempts exactly the selected action. Legacy spillover
-settings are retained for configuration compatibility, but never replace a
-learned choice. The operating threshold only scales the overload penalty.
+Compute spillover is deliberately class-neutral: the model may initially
+select any tier, while the runtime protects a saturated tier by continuing
+outward through the physical compute hierarchy.
 """
 
 # --- Physical availability ----------------------------------------------
@@ -15,7 +15,7 @@ LOCAL_DEVICE_ENABLED = True
 # task does not push a shared resource into the unstable saturation region.
 # Unavailable tiers are skipped. Cloud is terminal and therefore accepts any
 # task that still satisfies its physical (100%) capacity constraint.
-COMPUTE_SPILLOVER_ENABLED = False
+COMPUTE_SPILLOVER_ENABLED = True
 COMPUTE_SPILLOVER_THRESHOLD_PERCENT = 95.0
 COMPUTE_SPILLOVER_ORDER = (
     "LOCAL_DEVICE",
@@ -23,7 +23,6 @@ COMPUTE_SPILLOVER_ORDER = (
     "UAV_BS",
     "METRO",
     "CLOUD",
-    "SAT",       # satellite-IoT zones: UAV/local overflow outside the city
 )
 COMPUTE_SPILLOVER_TERMINAL_TIER = "CLOUD"
 

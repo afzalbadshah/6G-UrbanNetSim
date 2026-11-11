@@ -166,7 +166,7 @@ class CommonStateBuilder:
                 future_util[action] = (
                     current_util[action] + (100.0 * demand_cps / rate)
                     if rate > 0.0
-                    else 0.0
+                    else 100.0
                 )
             else:
                 feasible = server is not None
@@ -174,7 +174,7 @@ class CommonStateBuilder:
                 current_util[action] = max(
                     utilization["cpu"], utilization["memory"], utilization["storage"]
                 )
-                future_util[action] = projected_utilization(server, task)["peak"] if server is not None else 0.0
+                future_util[action] = projected_utilization(server, task)["peak"] if server is not None else 100.0
 
             # Headroom view: how much of THIS tier's capacity is free right now,
             # independent of this one task's own (usually tiny) demand -- a busy
@@ -189,10 +189,11 @@ class CommonStateBuilder:
             resource_fit[action] = min(1.0, max(0.0, 1.0 - float(current_util[action]) / 100.0))
             capacity_mask.append(int(feasible))
 
-        # Feasibility is visible in each tier block, never imposed on policies.
-        learning_mask = [1] * self.action_dim
+        # The learning mask is exactly the physical mask. Zero remains zero:
+        # no class ladder, utilization cut-off, or fabricated fallback action.
+        learning_mask = [int(x) for x in capacity_mask]
 
-        # ---- feature vector: 26 task/context features + per-action block ----
+        # ---- feature vector: 22 task/context features + per-action block ----
         max_data = float(getattr(cfg, "WORKLOAD", {}).get("data_per_device_kb", 10000.0) or 10000.0) * 2.5
         mobility_metrics = mobility.get_metrics() if mobility is not None and hasattr(mobility, "get_metrics") else {}
         device_battery_ratio = self._battery_ratio(task)
@@ -221,33 +222,21 @@ class CommonStateBuilder:
             1.0 if priority == 1 else 0.0,
             1.0 if priority == 2 else 0.0,
             1.0 if priority == 3 else 0.0,
-            # Satellite-IoT context: service zone (one-hot) and the serving
-            # LEO satellite's elevation (sin e: 1 at zenith). Observable only.
-            1.0 if str(getattr(task, "zone_id", "cellular")) == "cellular" else 0.0,
-            1.0 if str(getattr(task, "zone_id", "")) == "uav" else 0.0,
-            1.0 if str(getattr(task, "zone_id", "")) == "remote" else 0.0,
-            math.sin(math.radians(float(getattr(task, "sat_elevation_deg", 0.0) or 0.0)))
-            if int(getattr(task, "sat_available", 0) or 0) else 0.0,
         ]
-        # Scalability is measured from spare compute, without a tier name or
-        # preferred-action rule. Log scaling keeps device and datacenter values
-        # comparable while the best currently available capacity scores one.
-        spare_capacity = {
-            action: (
-                max(0.0, capacity * resource_fit[action])
-                if capacity_mask[action]
-                else 0.0
-            )
-            for action, capacity in tier_capacity.items()
-        }
-        max_spare_capacity = max(spare_capacity.values(), default=0.0)
+        # Capacity adequacy is relative to THIS task's demand, not to the
+        # largest tier in the deployment.  Once both MEC and Cloud can fully
+        # satisfy a task, neither receives an artificial score merely because
+        # its configured datacenter is larger.  Current load/headroom remains
+        # a separate observable through resource_fit and future_util.
         tier_capacity_ratio = {
             action: (
-                math.log1p(spare) / math.log1p(max_spare_capacity)
-                if spare > 0.0 and max_spare_capacity > 0.0
-                else 0.0
+                0.0
+                if capacity <= 0.0
+                else 1.0
+                if demand_cps <= 0.0
+                else min(1.0, max(0.0, capacity / demand_cps))
             )
-            for action, spare in spare_capacity.items()
+            for action, capacity in tier_capacity.items()
         }
         for action in range(self.action_dim):
             features.extend([
@@ -256,7 +245,7 @@ class CommonStateBuilder:
                 self._safe_norm(congestion[action], 100.0),                     # congestion
                 max(0.0, 1.0 - self._safe_norm(future_util[action], 100.0)),    # free headroom
                 float(resource_fit[action]),                                    # free capacity vs demand
-                float(tier_capacity_ratio[action]),                            # smooth spare capacity adequacy
+                float(tier_capacity_ratio[action]),                            # capacity / task demand
                 self._safe_norm(server_battery_ratio[action], 1.0),            # server battery
                 1.0 if server_battery_ratio[action] < low else 0.0,            # server battery low
                 int(tier_enabled[action]),                                      # tier present

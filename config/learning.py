@@ -8,12 +8,11 @@ how a model trains, edit the value here (one place).
 from config.workload import TRAIN_WORKLOAD
 
 # --- Network / replay ----------------------------------------------------
-# 26 task features (22 + 3 zone one-hot + satellite elevation) + 7 tiers x 10
-# per-tier features = 96. Changing ACTION_DIM or the per-tier feature count in
-# common_state.py requires updating STATE_DIM, or features are silently
-# truncated. (Satellite-IoT extension: 82 -> 96, 6 -> 7 actions incl. SAT.)
-STATE_DIM = 96
-ACTION_DIM = 7
+# 22 task features + 6 tiers x 10 per-tier features = 82. Changing ACTION_DIM
+# or the per-tier feature count in common_state.py requires updating STATE_DIM,
+# or features are silently truncated.
+STATE_DIM = 82
+ACTION_DIM = 6
 LEARNING_RATE = 0.001
 DISCOUNT_FACTOR = 0.95
 MEMORY_SIZE = 10000

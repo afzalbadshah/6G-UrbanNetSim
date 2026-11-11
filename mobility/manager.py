@@ -15,7 +15,6 @@ from copy import deepcopy
 from config import MOBILITY_CONFIG, UAV_BS_MIN_BATTERY_RATIO, UAV_BS_RECHARGE_ROUNDS
 from metrics.energy import energy_from_power_duration_j
 from mobility.handover_scheduler import HandoverScheduler, candidate_access_points
-from scheduler.common import common_config
 
 
 def _fallback_metric_defaults():
@@ -141,17 +140,6 @@ class MobilityManager:
                     ent.battery_remaining_j
                     - energy_from_power_duration_j(power_w=ent.propulsion_power_w, duration_s=dt_s),
                 )
-            # Energy harvesting (e.g. solar sensors in the satellite-IoT zones):
-            # profile "energy_harvest_w" average power, added once per round
-            # and capped at capacity.
-            harvest_w = float((getattr(ent, "device_profile", {}) or {}).get("energy_harvest_w", 0.0) or 0.0)
-            capacity_j = float(getattr(ent, "battery_capacity_j", 0.0) or 0.0)
-            if harvest_w > 0.0 and capacity_j > 0.0:
-                ent.battery_remaining_j = min(
-                    capacity_j,
-                    float(getattr(ent, "battery_remaining_j", 0.0) or 0.0)
-                    + energy_from_power_duration_j(power_w=harvest_w, duration_s=dt_s),
-                )
             if hasattr(ent, "mobility") and ent.mobility:
                 nx, ny = ent.mobility.next_position(dt_ms)
                 ent.position = [float(nx), float(ny)]
@@ -232,8 +220,6 @@ class MobilityManager:
         os.makedirs(out_dir, exist_ok=True)
         if hasattr(self.handover_scheduler, "save_logs"):
             self.handover_scheduler.save_logs(output_dir=out_dir)
-        if not bool(getattr(common_config, "WRITE_MOBILITY_SUMMARY_CSV", False)):
-            return
         path = os.path.join(out_dir, "mobility_results.csv")
         fields = [
             "round",

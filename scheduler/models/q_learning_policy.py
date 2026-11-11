@@ -83,17 +83,17 @@ class QLearningPolicy(BasePolicy):
         # decision-relevant, coarsely-binned features so that many similar
         # states collapse to the same bucket and Bellman updates accumulate.
         #
-        # Layout comes from CommonStateBuilder.build(): a 26-feature task/
+        # Layout comes from CommonStateBuilder.build(): a 22-feature task/
         # mobility prefix followed by action_dim blocks of 10 per-tier features.
         # Relevant prefix indices:  4=priority/3, 5=deadline/1000, 7=|signal|,
         # 8=local_compute_capable, 12=handover_risk, 18=battery_low,
-        # 19/20/21=priority one-hot, 22/23/24=zone, 25=satellite elevation.
-        # Per-tier block: +0=availability, +1=future util, +2=congestion.
+        # 19/20/21=priority one-hot.  Per-tier block (base = 22 + 10*a):
+        # +0=capacity_mask, +4=future_util, +5=congestion.
         s = np.asarray(state, dtype=np.float32)
         n = s.shape[0]
         bins = self._state_bins
         prefix = n - 10 * self.action_dim
-        if prefix in (22, 26) and n >= prefix:
+        if prefix == 22 and n >= 22:
             if s[19] or s[20] or s[21]:
                 priority = int(np.argmax(s[19:22])) + 1
             else:
@@ -106,16 +106,12 @@ class QLearningPolicy(BasePolicy):
                 self._bin(s[7], bins),            # link-quality (|signal|) bucket
                 self._bin(s[12], bins),           # handover-risk bucket
             ]
-            if prefix == 26:
-                parts.extend(int(round(float(v))) for v in s[22:25])
-                parts.append(self._bin(s[25], bins))
             for a in range(self.action_dim):
-                base = prefix + 10 * a
+                base = 22 + 10 * a
                 feasible = int(round(float(s[base]))) if base < n else 0
-                util_b = self._bin(s[base + 1], bins)
-                cong_b = self._bin(s[base + 2], bins)
-                capacity_b = self._bin(s[base + 5], bins)
-                parts.append((feasible, util_b, cong_b, capacity_b))
+                util_b = self._bin(s[base + 4], bins) if base + 4 < n else 0
+                cong_b = self._bin(s[base + 5], bins) if base + 5 < n else 0
+                parts.append((feasible, util_b, cong_b))
             return tuple(parts)
         # Layout-agnostic fallback: coarse-bin every feature (still far more
         # general than rounding to 2 decimals) if the expected layout changes.

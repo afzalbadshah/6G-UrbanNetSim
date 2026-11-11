@@ -4,8 +4,6 @@ ACTION_MEC_COLLAB = 2
 ACTION_METRO = 3
 ACTION_CLOUD = 4
 ACTION_UAV_BS = 5
-# Satellite-IoT scenario: device -> LEO satellite -> ground gateway -> Cloud.
-ACTION_SAT = 6
 
 ACTION_LABELS = {
     ACTION_LOCAL: "LOCAL_DEVICE",
@@ -14,7 +12,6 @@ ACTION_LABELS = {
     ACTION_METRO: "METRO",
     ACTION_CLOUD: "CLOUD",
     ACTION_UAV_BS: "UAV_BS",
-    ACTION_SAT: "SAT",
 }
 
 ACTION_ALIASES = {
@@ -33,10 +30,6 @@ ACTION_ALIASES = {
     "UAV": "UAV_BS",
     "UAVBS": "UAV_BS",
     "AIR": "UAV_BS",
-    "SAT": "SAT",
-    "LEO": "SAT",
-    "LEO_SAT": "SAT",
-    "SATELLITE": "SAT",
 }
 
 LABEL_TO_ACTION = {label: action for action, label in ACTION_LABELS.items()}

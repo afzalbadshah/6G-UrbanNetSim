@@ -20,7 +20,6 @@ from scheduler.common.common_action import (
     ACTION_MEC_COLLAB,
     ACTION_METRO,
     ACTION_UAV_BS,
-    ACTION_SAT,
 )
 
 
@@ -166,19 +165,17 @@ def projected_utilization(server, task):
         cpu = 100.0 * bounded_utilization_ratio(cpu_used, cpu_cap)
         mem = 100.0 * bounded_utilization_ratio(mem_used, mem_cap)
         sto = 100.0 * bounded_utilization_ratio(sto_used, sto_cap)
-        def projected_percent(used, capacity):
-            if capacity > 0.0:
-                return 100.0 * used / capacity
-            return 100.0 if used > 0.0 else 0.0
-
-        cpu_after = projected_percent(
-            cpu_used + allocation.allocated_compute_rate_cycles_per_s, cpu_cap
+        cpu_after = 100.0 * bounded_utilization_ratio(
+            cpu_used + allocation.allocated_compute_rate_cycles_per_s,
+            cpu_cap,
         )
-        mem_after = projected_percent(
-            mem_used + allocation.memory_allocated_bytes, mem_cap
+        mem_after = 100.0 * bounded_utilization_ratio(
+            mem_used + allocation.memory_allocated_bytes,
+            mem_cap,
         )
-        sto_after = projected_percent(
-            sto_used + allocation.storage_allocated_bytes, sto_cap
+        sto_after = 100.0 * bounded_utilization_ratio(
+            sto_used + allocation.storage_allocated_bytes,
+            sto_cap,
         )
     else:
         cpu_cap = max(float(getattr(server, "cpu_capacity", 0.0) or 0.0), 1e-9)
@@ -187,9 +184,9 @@ def projected_utilization(server, task):
         cpu = 100.0 * (1.0 - float(getattr(server, "available_cpu", 0.0)) / cpu_cap)
         mem = 100.0 * (1.0 - float(getattr(server, "available_memory", 0.0)) / mem_cap)
         sto = 100.0 * (1.0 - float(getattr(server, "available_storage", 0.0)) / sto_cap)
-        cpu_after = cpu + 100.0 * float(task.cpu_demand) / cpu_cap
-        mem_after = mem + 100.0 * float(task.memory_demand) / mem_cap
-        sto_after = sto + 100.0 * float(task.storage_demand) / sto_cap
+        cpu_after = min(100.0, cpu + 100.0 * float(task.cpu_demand) / cpu_cap)
+        mem_after = min(100.0, mem + 100.0 * float(task.memory_demand) / mem_cap)
+        sto_after = min(100.0, sto + 100.0 * float(task.storage_demand) / sto_cap)
     return {"cpu": cpu_after, "memory": mem_after, "storage": sto_after, "peak": max(cpu_after, mem_after, sto_after)}
 
 
@@ -323,19 +320,6 @@ def action_server(action, servers, task):
     return None
 
 
-def _zone_allows_action(task, action):
-    """Physical availability of an action in the device's current zone."""
-    from config import zones as zone_config
-    from scheduler.common.common_action import action_to_label
-
-    if action == ACTION_SAT and not zone_config.ZONES_ENABLED:
-        return False
-    zone_id = getattr(task, "zone_id", None)
-    if not zone_config.ZONES_ENABLED or zone_id is None:
-        return action != ACTION_SAT
-    return zone_config.zone_allows(zone_id, action_to_label(action))
-
-
 def allocatable_action_server(
     action,
     servers,
@@ -354,26 +338,6 @@ def allocatable_action_server(
     action = int(action)
     if action in (ACTION_LOCAL, ACTION_MEC_COLLAB):
         return None
-    # Satellite-IoT zones: an action exists only where its infrastructure does.
-    if not _zone_allows_action(task, action):
-        return None
-    if action == ACTION_SAT:
-        # Bent-pipe LEO path terminates at the Cloud; the satellite route
-        # (satellite -> gateway -> Cloud) is declared in the topology, so no
-        # terrestrial reachability from the device's ground attachment applies.
-        if not bool(getattr(task, "sat_available", 0)):
-            return None
-        clouds = [
-            server for server in servers or []
-            if tier_of(server) == "CLOUD"
-            and server_is_operational(server)
-            and has_capacity(server, task, util_threshold=100.0)
-        ]
-        if not clouds:
-            return None
-        return min(clouds, key=lambda server: max(
-            server_utilization(server)["cpu"], server_utilization(server)["memory"]
-        ))
     tier_by_action = {
         ACTION_MEC: "MEC",
         ACTION_METRO: "METRO",

@@ -35,7 +35,6 @@ from core.network_runtime import (
 from metrics.cost import OperatorCost, linear_cost
 from config.emissions import CARBON_INTENSITY_G_CO2_PER_JOULE
 from config.servers import ELECTRICITY_PRICE_PER_JOULE, tier_prices
-from config.zones import SAT_NODE_IDS, SATELLITE_CONFIG
 from metrics.delay import TaskDelayBreakdown, calculate_task_delay
 from metrics.emissions import operational_emissions_g
 from metrics.energy import (
@@ -704,11 +703,6 @@ class TaskExecutionRuntime:
         # originating device (LOCAL_DEVICE / "Onboard") has zero prices, so
         # onboard execution is free to the operator.
         compute_price_per_cpu_s, transport_price_per_byte = tier_prices(compute_tier)
-        if access_node_id in SAT_NODE_IDS:
-            # LEO satellite capacity is billed per byte, far above fibre.
-            transport_price_per_byte = float(
-                SATELLITE_CONFIG.get("transport_price_per_byte", transport_price_per_byte)
-            )
         operator_cpu_seconds = (
             self._reference_cpu_seconds(task, compute_completed=compute_completed)
             if compute_tier != "LOCAL_DEVICE"
